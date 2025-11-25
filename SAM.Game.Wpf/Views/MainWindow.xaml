@@ -16,7 +16,7 @@
     <Window.DataContext>
         <vm:MainViewModel />
     </Window.DataContext>
-    <Grid Margin="24">
+    <Grid Margin="24" Loaded="OnLoaded">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="2*" />
             <ColumnDefinition Width="3*" />

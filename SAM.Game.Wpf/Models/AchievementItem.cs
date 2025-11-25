@@ -7,5 +7,6 @@ namespace SAM.Game.Wpf.Models
         public string Description { get; set; }
         public bool Unlocked { get; set; }
         public string IconUrl { get; set; }
+        public string UnlockTime { get; set; }
     }
 }

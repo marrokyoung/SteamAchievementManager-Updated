@@ -9,6 +9,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SAM.API", "SAM.API\SAM.API.
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SAM.Game", "SAM.Game\SAM.Game.csproj", "{7640DE31-E54E-45F9-9CF0-8DF3A3EA30FC}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SAM.Picker.Wpf", "SAM.Picker.Wpf\SAM.Picker.Wpf.csproj", "{5E9FA584-4F99-49A6-A34D-333A6481FB8F}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SAM.Game.Wpf", "SAM.Game.Wpf\SAM.Game.Wpf.csproj", "{9D0F1D24-1B52-45F1-9D94-34D9D8A1F4C4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -27,7 +31,15 @@ Global
 		{7640DE31-E54E-45F9-9CF0-8DF3A3EA30FC}.Debug|x86.Build.0 = Debug|x86
 		{7640DE31-E54E-45F9-9CF0-8DF3A3EA30FC}.Release|x86.ActiveCfg = Release|x86
 		{7640DE31-E54E-45F9-9CF0-8DF3A3EA30FC}.Release|x86.Build.0 = Release|x86
-	EndGlobalSection
+		{5E9FA584-4F99-49A6-A34D-333A6481FB8F}.Debug|x86.ActiveCfg = Debug|x86
+		{5E9FA584-4F99-49A6-A34D-333A6481FB8F}.Debug|x86.Build.0 = Debug|x86
+		{5E9FA584-4F99-49A6-A34D-333A6481FB8F}.Release|x86.ActiveCfg = Release|x86
+		{5E9FA584-4F99-49A6-A34D-333A6481FB8F}.Release|x86.Build.0 = Release|x86
+		{9D0F1D24-1B52-45F1-9D94-34D9D8A1F4C4}.Debug|x86.ActiveCfg = Debug|x86
+		{9D0F1D24-1B52-45F1-9D94-34D9D8A1F4C4}.Debug|x86.Build.0 = Debug|x86
+		{9D0F1D24-1B52-45F1-9D94-34D9D8A1F4C4}.Release|x86.ActiveCfg = Release|x86
+		{9D0F1D24-1B52-45F1-9D94-34D9D8A1F4C4}.Release|x86.Build.0 = Release|x86
+EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection

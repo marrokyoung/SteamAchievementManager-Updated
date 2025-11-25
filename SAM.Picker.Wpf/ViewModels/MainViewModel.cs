@@ -2,6 +2,8 @@ using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
+using System.Diagnostics;
+using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Data;
 using SAM.Picker.Wpf.Models;
@@ -22,6 +24,7 @@ namespace SAM.Picker.Wpf.ViewModels
 
         public ObservableCollection<GameItem> Games { get; } = new();
         public ICollectionView FilteredGames { get; }
+        public RelayCommand LaunchGameCommand { get; }
 
         public string SearchText
         {
@@ -90,6 +93,14 @@ namespace SAM.Picker.Wpf.ViewModels
             var view = CollectionViewSource.GetDefaultView(Games);
             view.Filter = FilterGame;
             FilteredGames = view;
+
+            LaunchGameCommand = new RelayCommand(param =>
+            {
+                if (param is GameItem game)
+                {
+                    LaunchGame(game);
+                }
+            });
         }
 
         public async Task LoadAsync()
@@ -151,6 +162,36 @@ namespace SAM.Picker.Wpf.ViewModels
             }
 
             return game.Name?.IndexOf(SearchText, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private void LaunchGame(GameItem game)
+        {
+            try
+            {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string managerPath = Path.Combine(baseDir, "SAM.Game.Wpf.exe");
+
+                if (File.Exists(managerPath) == false)
+                {
+                    Status = $"Manager not found at {managerPath}";
+                    return;
+                }
+
+                ProcessStartInfo psi = new()
+                {
+                    FileName = managerPath,
+                    Arguments = game.Id.ToString(CultureInfo.InvariantCulture),
+                    UseShellExecute = false,
+                    WorkingDirectory = baseDir
+                };
+
+                Process.Start(psi);
+                Status = $"Launching manager for {game.Name}";
+            }
+            catch (Exception ex)
+            {
+                Status = $"Failed to launch manager: {ex.Message}";
+            }
         }
     }
 }

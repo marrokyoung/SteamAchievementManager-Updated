@@ -10,7 +10,8 @@
         Title="SAM Picker (WPF Preview)"
         Width="1100"
         Height="720"
-        Background="{StaticResource Brush.Background}">
+        Background="{StaticResource Brush.Background}"
+        Loaded="OnLoaded">
     <Window.DataContext>
         <vm:MainViewModel />
     </Window.DataContext>
@@ -36,10 +37,17 @@
         <!-- Search + Filters -->
         <DockPanel Grid.Row="1" Margin="0 0 0 12">
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                <Button Content="Owned" Margin="0 0 8 0" />
-                <Button Content="Normal" Margin="0 0 8 0" />
-                <Button Content="Demo" Margin="0 0 8 0" />
-                <Button Content="Mods" />
+                <ToggleButton Content="Normal"
+                              Margin="0 0 8 0"
+                              IsChecked="{Binding ShowNormal, Mode=TwoWay}" />
+                <ToggleButton Content="Demo"
+                              Margin="0 0 8 0"
+                              IsChecked="{Binding ShowDemo, Mode=TwoWay}" />
+                <ToggleButton Content="Mods"
+                              Margin="0 0 8 0"
+                              IsChecked="{Binding ShowMod, Mode=TwoWay}" />
+                <ToggleButton Content="Junk"
+                              IsChecked="{Binding ShowJunk, Mode=TwoWay}" />
             </StackPanel>
             <Border Background="{StaticResource Brush.SurfaceAlt}"
                     BorderBrush="{StaticResource Brush.Border}"
@@ -62,7 +70,7 @@
 
         <!-- Game grid -->
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding Games}">
+            <ItemsControl ItemsSource="{Binding FilteredGames}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
                         <WrapPanel IsItemsHost="True" ItemWidth="240" ItemHeight="120" />

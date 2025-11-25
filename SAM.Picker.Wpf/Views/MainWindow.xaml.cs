@@ -8,5 +8,13 @@ namespace SAM.Picker.Wpf.Views
         {
             InitializeComponent();
         }
+
+        private async void OnLoaded(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is ViewModels.MainViewModel vm)
+            {
+                await vm.LoadAsync();
+            }
+        }
     }
 }

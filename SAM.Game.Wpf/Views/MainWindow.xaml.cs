@@ -1,3 +1,4 @@
+using System;
 using System.Windows;
 
 namespace SAM.Game.Wpf.Views
@@ -13,8 +14,13 @@ namespace SAM.Game.Wpf.Views
         {
             if (DataContext is ViewModels.MainViewModel vm)
             {
-                // TODO: pass real appId; using placeholder 480 for now
-                await vm.LoadAsync(480);
+                long appId = 480;
+                var args = Environment.GetCommandLineArgs();
+                if (args.Length > 1 && long.TryParse(args[1], out long parsed))
+                {
+                    appId = parsed;
+                }
+                await vm.LoadAsync(appId);
             }
         }
     }

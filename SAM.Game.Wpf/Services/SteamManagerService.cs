@@ -6,6 +6,7 @@ using SAM.API;
 using SAM.API.Callbacks;
 using SAM.Game.Wpf.Models;
 using SAM.Game.Wpf.Vdf;
+using System.Linq;
 
 namespace SAM.Game.Wpf.Services
 {
@@ -100,6 +101,7 @@ namespace SAM.Game.Wpf.Services
                         Name = string.IsNullOrWhiteSpace(display.Name) ? id : display.Name,
                         Description = display.Description ?? string.Empty,
                         Unlocked = unlocked,
+                        OriginalUnlocked = unlocked,
                         UnlockTime = unlockTime > 0 ? DateTimeOffset.FromUnixTimeSeconds(unlockTime).LocalDateTime.ToString(CultureInfo.CurrentCulture) : string.Empty
                     });
                 }
@@ -146,6 +148,58 @@ namespace SAM.Game.Wpf.Services
                 }
 
                 return ((IReadOnlyList<AchievementItem>)achievements, (IReadOnlyList<StatItem>)stats);
+            }).ConfigureAwait(false);
+        }
+
+        public async Task StoreAsync(IEnumerable<AchievementItem> achievements, IEnumerable<StatItem> stats)
+        {
+            if (!_initialized)
+            {
+                throw new InvalidOperationException("Service not initialized.");
+            }
+
+            await Task.Run(() =>
+            {
+                // Apply achievements
+                foreach (var ach in achievements.Where(a => a.IsModified))
+                {
+                    _client.SteamUserStats.SetAchievement(ach.Id, ach.Unlocked);
+                }
+
+                // Apply stats
+                foreach (var stat in stats.Where(s => s.IsModified && !s.HasError))
+                {
+                    if (stat.Type == StatType.Int)
+                    {
+                        if (int.TryParse(stat.Value, NumberStyles.Integer, CultureInfo.CurrentCulture, out int intVal))
+                        {
+                            _client.SteamUserStats.SetStatValue(stat.Id, intVal);
+                        }
+                    }
+                    else if (stat.Type == StatType.Float)
+                    {
+                        if (float.TryParse(stat.Value, NumberStyles.Float, CultureInfo.CurrentCulture, out float floatVal))
+                        {
+                            _client.SteamUserStats.SetStatValue(stat.Id, floatVal);
+                        }
+                    }
+                }
+
+                // Commit
+                _client.SteamUserStats.StoreStats();
+            }).ConfigureAwait(false);
+        }
+
+        public async Task ResetAllAsync(bool achievementsToo)
+        {
+            if (!_initialized)
+            {
+                throw new InvalidOperationException("Service not initialized.");
+            }
+
+            await Task.Run(() =>
+            {
+                _client.SteamUserStats.ResetAllStats(achievementsToo);
             }).ConfigureAwait(false);
         }
 

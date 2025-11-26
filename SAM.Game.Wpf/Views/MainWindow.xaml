@@ -27,13 +27,22 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <StackPanel Orientation="Horizontal" Grid.Row="0" Grid.ColumnSpan="2" VerticalAlignment="Center" Margin="0 0 0 16">
-            <TextBlock Text="{Binding GameTitle}" FontSize="22" FontWeight="Bold" />
-            <Border Width="10" />
-            <TextBlock Style="{StaticResource MutedText}" VerticalAlignment="Bottom" Margin="4 0 0 2"
-                       Text="WPF preview • modern dark theme" />
-        </StackPanel>
+        <!-- Header / Commands -->
+        <DockPanel Grid.Row="0" Grid.ColumnSpan="2" LastChildFill="True" Margin="0 0 0 16" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+                <TextBlock Text="{Binding GameTitle}" FontSize="22" FontWeight="Bold" />
+                <Border Width="10" />
+                <TextBlock Style="{StaticResource MutedText}" VerticalAlignment="Bottom" Margin="4 0 0 2"
+                           Text="WPF preview • modern dark theme" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right">
+                <Button Content="Refresh" Command="{Binding RefreshCommand}" Margin="0 0 8 0" />
+                <Button Content="Unlock All" Command="{Binding UnlockAllCommand}" Margin="0 0 8 0" />
+                <Button Content="Lock All" Command="{Binding LockAllCommand}" Margin="0 0 8 0" />
+                <Button Content="Store" Command="{Binding StoreCommand}" Margin="0 0 8 0" />
+                <Button Content="Reset All" Command="{Binding ResetAllCommand}" />
+            </StackPanel>
+        </DockPanel>
 
         <!-- Achievements list -->
         <Border Grid.Row="1" Grid.Column="0"

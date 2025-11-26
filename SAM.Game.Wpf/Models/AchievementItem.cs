@@ -8,5 +8,7 @@ namespace SAM.Game.Wpf.Models
         public bool Unlocked { get; set; }
         public string IconUrl { get; set; }
         public string UnlockTime { get; set; }
+        public bool OriginalUnlocked { get; set; }
+        public bool IsModified => Unlocked != OriginalUnlocked;
     }
 }

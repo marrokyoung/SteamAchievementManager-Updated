@@ -4,6 +4,8 @@ using SAM.Game.Wpf.Models;
 using SAM.Game.Wpf.Services;
 using System.Threading.Tasks;
 using System.Linq;
+using System.Collections.Generic;
+using System.Windows.Media.Imaging;
 
 namespace SAM.Game.Wpf.ViewModels
 {
@@ -13,6 +15,7 @@ namespace SAM.Game.Wpf.ViewModels
         private string _statusMessage = "Ready";
         private bool _isBusy;
         private readonly SteamManagerService _service = new();
+        private readonly ImageCacheService _images = new();
         private long _currentAppId;
 
         public RelayCommand RefreshCommand { get; }
@@ -23,6 +26,7 @@ namespace SAM.Game.Wpf.ViewModels
 
         public ObservableCollection<AchievementItem> Achievements { get; } = new();
         public ObservableCollection<StatItem> Stats { get; } = new();
+        public Dictionary<string, BitmapImage> AchievementIcons { get; } = new();
 
         public string GameTitle
         {
@@ -88,6 +92,7 @@ namespace SAM.Game.Wpf.ViewModels
                 {
                     Achievements.Add(a);
                 }
+                await LoadAchievementIcons(achievements).ConfigureAwait(true);
 
                 Stats.Clear();
                 foreach (var s in stats)
@@ -175,6 +180,25 @@ namespace SAM.Game.Wpf.ViewModels
             foreach (var ach in Achievements)
             {
                 ach.Unlocked = unlocked;
+            }
+        }
+
+        private async Task LoadAchievementIcons(IEnumerable<AchievementItem> achievements)
+        {
+            foreach (var ach in achievements)
+            {
+                // Prefer the normal icon if present
+                var iconUrl = string.IsNullOrWhiteSpace(ach.IconUrl) ? null : ach.IconUrl;
+                if (string.IsNullOrWhiteSpace(iconUrl))
+                {
+                    continue;
+                }
+
+                var img = await _images.GetAsync(iconUrl, maxBytes: API.SecurityConfig.MAX_ICON_SIZE_BYTES).ConfigureAwait(true);
+                if (img != null)
+                {
+                    AchievementIcons[ach.Id] = img;
+                }
             }
         }
     }

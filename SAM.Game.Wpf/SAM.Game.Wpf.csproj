@@ -17,4 +17,8 @@
   <ItemGroup>
     <ProjectReference Include="..\SAM.API\SAM.API.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Remove="Converters\NullToVisibilityConverter.cs" />
+    <None Remove="Services\ImageCacheService.cs" />
+  </ItemGroup>
 </Project>

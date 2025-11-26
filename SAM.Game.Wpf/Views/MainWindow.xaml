@@ -5,6 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:SAM.Game.Wpf.ViewModels"
         xmlns:models="clr-namespace:SAM.Game.Wpf.Models"
+        xmlns:conv="clr-namespace:SAM.Game.Wpf.Converters"
         mc:Ignorable="d"
         Title="SAM Manager (WPF Preview)"
         Width="1200"
@@ -12,6 +13,9 @@
         Background="{StaticResource Brush.Background}">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <conv:NullToVisibilityConverter x:Key="NullToVis" />
+        <conv:AchievementIconConverter x:Key="AchievementIconConverter" />
+        <conv:AchievementIconVisibilityConverter x:Key="AchievementIconVisibilityConverter" />
     </Window.Resources>
     <Window.DataContext>
         <vm:MainViewModel />
@@ -68,15 +72,30 @@
                                         CornerRadius="{StaticResource Radius.Medium}"
                                         Padding="10"
                                         Margin="0 6 0 6">
-                                    <StackPanel>
-                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                            <CheckBox IsChecked="{Binding Unlocked}"
-                                                      Margin="0 0 8 0"
-                                                      VerticalAlignment="Center" />
-                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="60" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Background="{StaticResource Brush.Surface}"
+                                                CornerRadius="{StaticResource Radius.Small}"
+                                                Width="48" Height="48"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center">
+                                            <Image Width="48" Height="48"
+                                                   Source="{Binding Id, Converter={StaticResource AchievementIconConverter}, ConverterParameter={Binding RelativeSource={RelativeSource AncestorType=Window}}}"
+                                                   Visibility="{Binding Id, Converter={StaticResource AchievementIconVisibilityConverter}, ConverterParameter={Binding RelativeSource={RelativeSource AncestorType=Window}}}" />
+                                        </Border>
+                                        <StackPanel Grid.Column="1">
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <CheckBox IsChecked="{Binding Unlocked}"
+                                                          Margin="0 0 8 0"
+                                                          VerticalAlignment="Center" />
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" Margin="24 2 0 0" />
                                         </StackPanel>
-                                        <TextBlock Text="{Binding Description}" Style="{StaticResource MutedText}" Margin="24 2 0 0" />
-                                    </StackPanel>
+                                    </Grid>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>

@@ -113,26 +113,36 @@ namespace SAM.Game.Wpf.Services
                     {
                         ok = _client.SteamUserStats.GetStatValue(statDef.Id, out int intVal);
                         value = intVal.ToString(CultureInfo.CurrentCulture);
+                        stats.Add(new StatItem
+                        {
+                            Id = statDef.Id,
+                            DisplayName = string.IsNullOrWhiteSpace(statDef.DisplayName) ? statDef.Id : statDef.DisplayName,
+                            Value = value,
+                            OriginalValue = value,
+                            Type = StatType.Int,
+                            Min = statDef.MinValue,
+                            Max = statDef.MaxValue,
+                            IsIncrementOnly = statDef.IncrementOnly,
+                            IsProtected = statDef.PermissionProtected
+                        });
                     }
                     else if (statDef.Type == "float")
                     {
                         ok = _client.SteamUserStats.GetStatValue(statDef.Id, out float floatVal);
                         value = floatVal.ToString(CultureInfo.CurrentCulture);
+                        stats.Add(new StatItem
+                        {
+                            Id = statDef.Id,
+                            DisplayName = string.IsNullOrWhiteSpace(statDef.DisplayName) ? statDef.Id : statDef.DisplayName,
+                            Value = value,
+                            OriginalValue = value,
+                            Type = StatType.Float,
+                            Min = statDef.MinValue,
+                            Max = statDef.MaxValue,
+                            IsIncrementOnly = statDef.IncrementOnly,
+                            IsProtected = statDef.PermissionProtected
+                        });
                     }
-
-                    if (!ok)
-                    {
-                        continue;
-                    }
-
-                    stats.Add(new StatItem
-                    {
-                        Id = statDef.Id,
-                        DisplayName = string.IsNullOrWhiteSpace(statDef.DisplayName) ? statDef.Id : statDef.DisplayName,
-                        Value = value,
-                        IsIncrementOnly = statDef.IncrementOnly,
-                        IsProtected = statDef.PermissionProtected
-                    });
                 }
 
                 return ((IReadOnlyList<AchievementItem>)achievements, (IReadOnlyList<StatItem>)stats);
@@ -185,7 +195,10 @@ namespace SAM.Game.Wpf.Services
                                 DisplayName = name,
                                 Type = "int",
                                 IncrementOnly = stat["incrementonly"].AsBoolean(false),
-                                PermissionProtected = (stat["permission"].AsInteger(0) & 2) != 0
+                                PermissionProtected = (stat["permission"].AsInteger(0) & 2) != 0,
+                                MinValue = stat["min"].AsInteger(int.MinValue),
+                                MaxValue = stat["max"].AsInteger(int.MaxValue),
+                                DefaultValue = stat["default"].AsInteger(0)
                             });
                             break;
                         }
@@ -200,7 +213,10 @@ namespace SAM.Game.Wpf.Services
                                 DisplayName = name,
                                 Type = "float",
                                 IncrementOnly = stat["incrementonly"].AsBoolean(false),
-                                PermissionProtected = (stat["permission"].AsInteger(0) & 2) != 0
+                                PermissionProtected = (stat["permission"].AsInteger(0) & 2) != 0,
+                                MinValue = stat["min"].AsFloat(float.MinValue),
+                                MaxValue = stat["max"].AsFloat(float.MaxValue),
+                                DefaultValue = stat["default"].AsFloat(0f)
                             });
                             break;
                         }
@@ -279,6 +295,9 @@ namespace SAM.Game.Wpf.Services
             public string Type { get; set; }
             public bool IncrementOnly { get; set; }
             public bool PermissionProtected { get; set; }
+            public double MinValue { get; set; }
+            public double MaxValue { get; set; }
+            public double DefaultValue { get; set; }
         }
 
         public void Dispose()

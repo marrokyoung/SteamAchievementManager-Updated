@@ -105,11 +105,21 @@
                         <Style TargetType="DataGridRow">
                             <Setter Property="Background" Value="{StaticResource Brush.SurfaceAlt}" />
                             <Setter Property="SnapsToDevicePixels" Value="True" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasError}" Value="True">
+                                    <Setter Property="Background" Value="#33f85149" />
+                                    <Setter Property="ToolTip" Value="{Binding Error}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding HasWarning}" Value="True">
+                                    <Setter Property="Background" Value="#33f0c674" />
+                                    <Setter Property="ToolTip" Value="{Binding Warning}" />
+                                </DataTrigger>
+                            </Style.Triggers>
                         </Style>
                     </DataGrid.Resources>
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Name" Binding="{Binding DisplayName}" Width="2*" IsReadOnly="True" />
-                        <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*" />
+                        <DataGridTextColumn Header="Value" Binding="{Binding Value, UpdateSourceTrigger=PropertyChanged, ValidatesOnDataErrors=True}" Width="*" />
                         <DataGridCheckBoxColumn Header="Protected" Binding="{Binding IsProtected}" IsReadOnly="True" Width="100" />
                         <DataGridCheckBoxColumn Header="Increment Only" Binding="{Binding IsIncrementOnly}" IsReadOnly="True" Width="120" />
                     </DataGrid.Columns>

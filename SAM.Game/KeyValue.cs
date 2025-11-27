@@ -27,7 +27,7 @@ using System.Linq;
 
 namespace SAM.Game
 {
-    internal class KeyValue
+    public class KeyValue
     {
         private static readonly KeyValue _Invalid = new();
         public string Name = "<root>";
@@ -41,12 +41,12 @@ namespace SAM.Game
         {
             get
             {
-                if (this.Children == null)
+                if (Children == null)
                 {
                     return _Invalid;
                 }
 
-                var child = this.Children.SingleOrDefault(
+                var child = Children.SingleOrDefault(
                     c => string.Compare(c.Name, key, StringComparison.InvariantCultureIgnoreCase) == 0);
 
                 if (child == null)
@@ -60,49 +60,49 @@ namespace SAM.Game
 
         public string AsString(string defaultValue)
         {
-            if (this.Valid == false)
+            if (Valid == false)
             {
                 return defaultValue;
             }
 
-            if (this.Value == null)
+            if (Value == null)
             {
                 return defaultValue;
             }
 
-            return this.Value.ToString();
+            return Value.ToString();
         }
 
         public int AsInteger(int defaultValue)
         {
-            if (this.Valid == false)
+            if (Valid == false)
             {
                 return defaultValue;
             }
 
-            switch (this.Type)
+            switch (Type)
             {
                 case KeyValueType.String:
                 case KeyValueType.WideString:
                 {
-                    return int.TryParse((string)this.Value, out int value) == false
+                    return int.TryParse((string)Value, out int value) == false
                         ? defaultValue
                         : value;
                 }
 
                 case KeyValueType.Int32:
                 {
-                    return (int)this.Value;
+                    return (int)Value;
                 }
 
                 case KeyValueType.Float32:
                 {
-                    return (int)((float)this.Value);
+                    return (int)((float)Value);
                 }
 
                 case KeyValueType.UInt64:
                 {
-                    return (int)((ulong)this.Value & 0xFFFFFFFF);
+                    return (int)((ulong)Value & 0xFFFFFFFF);
                 }
             }
 
@@ -111,34 +111,34 @@ namespace SAM.Game
 
         public float AsFloat(float defaultValue)
         {
-            if (this.Valid == false)
+            if (Valid == false)
             {
                 return defaultValue;
             }
 
-            switch (this.Type)
+            switch (Type)
             {
                 case KeyValueType.String:
                 case KeyValueType.WideString:
                 {
-                    return float.TryParse((string)this.Value, out float value) == false
+                    return float.TryParse((string)Value, out float value) == false
                         ? defaultValue
                         : value;
                 }
 
                 case KeyValueType.Int32:
                 {
-                    return (int)this.Value;
+                    return (int)Value;
                 }
 
                 case KeyValueType.Float32:
                 {
-                    return (float)this.Value;
+                    return (float)Value;
                 }
 
                 case KeyValueType.UInt64:
                 {
-                    return (ulong)this.Value & 0xFFFFFFFF;
+                    return (ulong)Value & 0xFFFFFFFF;
                 }
             }
 
@@ -147,34 +147,34 @@ namespace SAM.Game
 
         public bool AsBoolean(bool defaultValue)
         {
-            if (this.Valid == false)
+            if (Valid == false)
             {
                 return defaultValue;
             }
 
-            switch (this.Type)
+            switch (Type)
             {
                 case KeyValueType.String:
                 case KeyValueType.WideString:
                 {
-                    return int.TryParse((string)this.Value, out int value) == false
+                    return int.TryParse((string)Value, out int value) == false
                         ? defaultValue
                         : value != 0;
                 }
 
                 case KeyValueType.Int32:
                 {
-                    return ((int)this.Value) != 0;
+                    return ((int)Value) != 0;
                 }
 
                 case KeyValueType.Float32:
                 {
-                    return ((int)((float)this.Value)) != 0;
+                    return ((int)((float)Value)) != 0;
                 }
 
                 case KeyValueType.UInt64:
                 {
-                    return ((ulong)this.Value) != 0;
+                    return ((ulong)Value) != 0;
                 }
             }
 
@@ -183,17 +183,17 @@ namespace SAM.Game
 
         public override string ToString()
         {
-            if (this.Valid == false)
+            if (Valid == false)
             {
                 return "<invalid>";
             }
 
-            if (this.Type == KeyValueType.None)
+            if (Type == KeyValueType.None)
             {
-                return this.Name;
+                return Name;
             }
 
-            return $"{this.Name} = {this.Value}";
+            return $"{Name} = {Value}";
         }
 
         public static KeyValue LoadAsBinary(string path)
@@ -236,7 +236,7 @@ namespace SAM.Game
                 throw new InvalidDataException(message);
             }
 
-            this.Children = new();
+            Children = new();
             try
             {
                 while (true)
@@ -320,10 +320,10 @@ namespace SAM.Game
                         throw new FormatException();
                     }
 
-                    this.Children.Add(current);
+                    Children.Add(current);
                 }
 
-                this.Valid = true;
+                Valid = true;
                 return input.Position == input.Length;
             }
             catch (Exception)

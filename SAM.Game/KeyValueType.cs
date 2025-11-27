@@ -22,7 +22,7 @@
 
 namespace SAM.Game
 {
-    internal enum KeyValueType : byte
+    public enum KeyValueType : byte
     {
         None = 0,
         String = 1,

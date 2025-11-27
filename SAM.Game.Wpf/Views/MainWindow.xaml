@@ -1,4 +1,4 @@
-﻿<Window x:Class="SAM.Game.Wpf.Views.MainWindow"
+<Window x:Class="SAM.Game.Wpf.Views.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -10,29 +10,58 @@
         Title="SAM Manager (WPF Preview)"
         Width="1200"
         Height="800"
-        Background="{StaticResource Brush.Background}">
+        WindowStyle="None"
+        ResizeMode="CanResize"
+        Background="{StaticResource Brush.Background}"
+        Loaded="OnLoaded">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
         <conv:NullToVisibilityConverter x:Key="NullToVis" />
         <conv:AchievementIconConverter x:Key="AchievementIconConverter" />
         <conv:AchievementIconVisibilityConverter x:Key="AchievementIconVisibilityConverter" />
+        <conv:ToastBrushConverter x:Key="ToastBrushConverter" />
     </Window.Resources>
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0"
+                      ResizeBorderThickness="6"
+                      GlassFrameThickness="0"
+                      UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
     <Window.DataContext>
         <vm:MainViewModel />
     </Window.DataContext>
-    <Grid Margin="24" Loaded="OnLoaded">
+
+    <Grid Margin="12">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="2*" />
             <ColumnDefinition Width="3*" />
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
+            <RowDefinition Height="40" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- Custom title bar -->
+        <Border Grid.Row="0" Grid.ColumnSpan="2"
+                Background="{StaticResource Brush.SurfaceAlt}"
+                BorderBrush="{StaticResource Brush.Border}"
+                BorderThickness="0,0,0,1">
+            <DockPanel LastChildFill="True" MouseDown="OnTitleBarMouseDown">
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="8 0">
+                    <TextBlock Text="SAM Manager" FontWeight="SemiBold" Foreground="{StaticResource Brush.Text}" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                    <Button Content="—" Width="40" Height="36" Click="OnMinimizeClick" />
+                    <Button Content="□" Width="40" Height="36" Click="OnMaximizeClick" />
+                    <Button Content="✕" Width="40" Height="36" Background="{StaticResource Brush.Danger}" Click="OnCloseClick" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
         <!-- Header / Commands -->
-        <DockPanel Grid.Row="0" Grid.ColumnSpan="2" LastChildFill="True" Margin="0 0 0 16" VerticalAlignment="Center">
+        <DockPanel Grid.Row="1" Grid.ColumnSpan="2" LastChildFill="True" Margin="0 0 0 16" VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
                 <TextBlock Text="{Binding GameTitle}" FontSize="22" FontWeight="Bold" />
                 <Border Width="10" />
@@ -49,7 +78,7 @@
         </DockPanel>
 
         <!-- Achievements list -->
-        <Border Grid.Row="1" Grid.Column="0"
+        <Border Grid.Row="2" Grid.Column="0"
                 Background="{StaticResource Brush.Surface}"
                 BorderBrush="{StaticResource Brush.Border}"
                 BorderThickness="1"
@@ -105,7 +134,7 @@
         </Border>
 
         <!-- Stats panel -->
-        <Border Grid.Row="1" Grid.Column="1"
+        <Border Grid.Row="2" Grid.Column="1"
                 Background="{StaticResource Brush.Surface}"
                 BorderBrush="{StaticResource Brush.Border}"
                 BorderThickness="1"
@@ -156,7 +185,7 @@
         </Border>
 
         <!-- Status bar -->
-        <DockPanel Grid.Row="2" Grid.ColumnSpan="2" VerticalAlignment="Center">
+        <DockPanel Grid.Row="3" Grid.ColumnSpan="2" VerticalAlignment="Center">
             <StackPanel Orientation="Vertical" DockPanel.Dock="Left">
                 <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource MutedText}" />
                 <Border Background="{Binding ToastSeverity, Converter={StaticResource ToastBrushConverter}}"

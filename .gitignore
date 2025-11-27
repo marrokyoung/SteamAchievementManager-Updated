@@ -396,3 +396,8 @@ notes.md
 
 # Ignore nul file
 nul
+
+# Electron build artifacts
+electron/dist/
+electron/dist-electron/
+electron/.vite/

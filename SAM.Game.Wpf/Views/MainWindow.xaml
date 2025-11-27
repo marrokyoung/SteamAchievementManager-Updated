@@ -157,7 +157,16 @@
 
         <!-- Status bar -->
         <DockPanel Grid.Row="2" Grid.ColumnSpan="2" VerticalAlignment="Center">
-            <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource MutedText}" />
+            <StackPanel Orientation="Vertical" DockPanel.Dock="Left">
+                <TextBlock Text="{Binding StatusMessage}" Style="{StaticResource MutedText}" />
+                <Border Background="{Binding ToastSeverity, Converter={StaticResource ToastBrushConverter}}"
+                        CornerRadius="{StaticResource Radius.Small}"
+                        Padding="8 4"
+                        Margin="0 4 0 0"
+                        Visibility="{Binding ToastVisible, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="{Binding ToastMessage}" />
+                </Border>
+            </StackPanel>
             <ProgressBar Width="180" Height="6" Margin="12 0 0 0"
                          IsIndeterminate="{Binding IsBusy}"
                          Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" />

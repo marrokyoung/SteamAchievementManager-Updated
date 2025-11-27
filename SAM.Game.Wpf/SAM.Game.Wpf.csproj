@@ -19,6 +19,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Remove="Converters\NullToVisibilityConverter.cs" />
+    <None Remove="Converters\AchievementIconConverter.cs" />
+    <None Remove="Converters\AchievementIconVisibilityConverter.cs" />
+    <None Remove="Converters\ToastBrushConverter.cs" />
     <None Remove="Services\ImageCacheService.cs" />
   </ItemGroup>
 </Project>

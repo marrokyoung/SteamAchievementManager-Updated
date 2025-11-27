@@ -1,11 +1,15 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Media.Imaging;
 using SAM.Game.Wpf.Models;
 using SAM.Game.Wpf.Services;
-using System.Threading.Tasks;
-using System.Linq;
-using System.Collections.Generic;
-using System.Windows.Media.Imaging;
 
 namespace SAM.Game.Wpf.ViewModels
 {
@@ -17,6 +21,8 @@ namespace SAM.Game.Wpf.ViewModels
         private readonly SteamManagerService _service = new();
         private readonly ImageCacheService _images = new();
         private long _currentAppId;
+        private string _toastMessage;
+        private string _toastSeverity;
 
         public RelayCommand RefreshCommand { get; }
         public RelayCommand StoreCommand { get; }
@@ -40,21 +46,50 @@ namespace SAM.Game.Wpf.ViewModels
             set => SetProperty(ref _statusMessage, value);
         }
 
+        public string ToastMessage
+        {
+            get => _toastMessage;
+            set
+            {
+                SetProperty(ref _toastMessage, value);
+                OnPropertyChanged(nameof(ToastVisible));
+            }
+        }
+
+        public string ToastSeverity
+        {
+            get => _toastSeverity;
+            set => SetProperty(ref _toastSeverity, value);
+        }
+
+        public bool ToastVisible => string.IsNullOrWhiteSpace(ToastMessage) == false;
+
         public bool IsBusy
         {
             get => _isBusy;
-            set => SetProperty(ref _isBusy, value);
+            set
+            {
+                if (_isBusy == value)
+                {
+                    return;
+                }
+                _isBusy = value;
+                OnPropertyChanged();
+                CommandManager.InvalidateRequerySuggested();
+            }
         }
 
         public MainViewModel()
         {
             SeedDesignData();
 
-            RefreshCommand = new RelayCommand(async () => await LoadAsync(_currentAppId), () => !_isBusy);
-            StoreCommand = new RelayCommand(async () => await StoreAsync(), () => !_isBusy);
-            ResetAllCommand = new RelayCommand(async () => await ResetAllAsync(), () => !_isBusy);
-            UnlockAllCommand = new RelayCommand(() => BulkSetAchievements(true), () => !_isBusy);
-            LockAllCommand = new RelayCommand(() => BulkSetAchievements(false), () => !_isBusy);
+            RefreshCommand = new RelayCommand(async () => await LoadAsync(_currentAppId), () => CanExecuteCommands);
+            StoreCommand = new RelayCommand(async () => await StoreAsync(), () => CanStore);
+            ResetAllCommand = new RelayCommand(async () => await ResetAllAsync(), () => CanExecuteCommands);
+            UnlockAllCommand = new RelayCommand(() => BulkSetAchievements(true), () => CanExecuteCommands);
+            LockAllCommand = new RelayCommand(() => BulkSetAchievements(false), () => CanExecuteCommands);
+
+            Stats.CollectionChanged += OnStatsCollectionChanged;
         }
 
         private void SeedDesignData()
@@ -105,11 +140,13 @@ namespace SAM.Game.Wpf.ViewModels
             catch (Exception ex)
             {
                 StatusMessage = $"Failed to load: {ex.Message}";
+                ShowToast($"Failed to load: {ex.Message}", "error");
             }
             finally
             {
                 IsBusy = false;
             }
+            CommandManager.InvalidateRequerySuggested();
         }
 
         private async Task StoreAsync()
@@ -138,20 +175,28 @@ namespace SAM.Game.Wpf.ViewModels
                 }
 
                 StatusMessage = "Stored successfully.";
+                ShowToast("Stored successfully.", "success");
             }
             catch (Exception ex)
             {
                 StatusMessage = $"Store failed: {ex.Message}";
+                ShowToast($"Store failed: {ex.Message}", "error");
             }
             finally
             {
                 IsBusy = false;
             }
+            CommandManager.InvalidateRequerySuggested();
         }
 
         private async Task ResetAllAsync()
         {
             if (_isBusy)
+            {
+                return;
+            }
+
+            if (MessageBox.Show("Reset all stats and achievements? This cannot be undone.", "Confirm reset", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
             {
                 return;
             }
@@ -164,23 +209,33 @@ namespace SAM.Game.Wpf.ViewModels
                 await _service.ResetAllAsync(true).ConfigureAwait(true);
                 await LoadAsync(_currentAppId).ConfigureAwait(true);
                 StatusMessage = "Reset complete.";
+                ShowToast("Reset complete.", "success");
             }
             catch (Exception ex)
             {
                 StatusMessage = $"Reset failed: {ex.Message}";
+                ShowToast($"Reset failed: {ex.Message}", "error");
             }
             finally
             {
                 IsBusy = false;
             }
+            CommandManager.InvalidateRequerySuggested();
         }
 
         private void BulkSetAchievements(bool unlocked)
         {
+            if (MessageBox.Show(unlocked ? "Unlock all achievements?" : "Lock all achievements?", "Confirm", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
             foreach (var ach in Achievements)
             {
                 ach.Unlocked = unlocked;
             }
+
+            CommandManager.InvalidateRequerySuggested();
         }
 
         private async Task LoadAchievementIcons(IEnumerable<AchievementItem> achievements)
@@ -200,6 +255,47 @@ namespace SAM.Game.Wpf.ViewModels
                     AchievementIcons[ach.Id] = img;
                 }
             }
+        }
+
+        private bool CanExecuteCommands => !_isBusy;
+
+        private bool CanStore => !_isBusy && !HasValidationErrors;
+
+        private bool HasValidationErrors => Stats.Any(s => s.HasError);
+
+        private void OnStatsCollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.NewItems != null)
+            {
+                foreach (INotifyPropertyChanged npc in e.NewItems.OfType<INotifyPropertyChanged>())
+                {
+                    npc.PropertyChanged += OnStatPropertyChanged;
+                }
+            }
+            if (e.OldItems != null)
+            {
+                foreach (INotifyPropertyChanged npc in e.OldItems.OfType<INotifyPropertyChanged>())
+                {
+                    npc.PropertyChanged -= OnStatPropertyChanged;
+                }
+            }
+            OnPropertyChanged(nameof(HasValidationErrors));
+            CommandManager.InvalidateRequerySuggested();
+        }
+
+        private void OnStatPropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(StatItem.HasError))
+            {
+                OnPropertyChanged(nameof(HasValidationErrors));
+                CommandManager.InvalidateRequerySuggested();
+            }
+        }
+
+        private void ShowToast(string message, string severity)
+        {
+            ToastMessage = message;
+            ToastSeverity = severity;
         }
     }
 }

@@ -392,6 +392,7 @@ FodyWeavers.xsd
 
 # Claude Codebase Analysis Files
 CLAUDE.md
+notes.md
 
 # Ignore nul file
 nul

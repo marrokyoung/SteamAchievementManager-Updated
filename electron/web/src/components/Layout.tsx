@@ -7,9 +7,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
   const showBack = location.pathname !== '/'
 
-  const handleMinimize = () => window.electron.windowMinimize()
-  const handleMaximize = () => window.electron.windowMaximize()
-  const handleClose = () => window.electron.windowClose()
+  const handleMinimize = () => window.electron?.windowMinimize?.()
+  const handleMaximize = () => window.electron?.windowMaximize?.()
+  const handleClose = () => window.electron?.windowClose?.()
 
   return (
     <div className="h-screen flex flex-col bg-background">

@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
 import PickerView from './views/PickerView'
 import ManagerView from './views/ManagerView'
+import { Toaster } from './components/ui/toaster'
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
           <Route path="/manager/:appId" element={<ManagerView />} />
         </Routes>
       </Layout>
+      <Toaster />
     </BrowserRouter>
   )
 }

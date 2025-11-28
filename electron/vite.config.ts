@@ -15,7 +15,11 @@ export default defineConfig({
           build: {
             outDir: path.resolve(__dirname, 'dist-electron'),
             rollupOptions: {
-              external: ['electron']
+              external: ['electron'],
+              output: {
+                entryFileNames: 'index.js',
+                format: 'cjs'
+              }
             }
           }
         }
@@ -30,7 +34,11 @@ export default defineConfig({
           build: {
             outDir: path.resolve(__dirname, 'dist-electron'),
             rollupOptions: {
-              external: ['electron']
+              external: ['electron'],
+              output: {
+                entryFileNames: 'preload.js',
+                format: 'cjs'
+              }
             }
           }
         }

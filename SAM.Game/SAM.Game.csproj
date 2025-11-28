@@ -25,6 +25,7 @@
     <LangVersion>9.0</LangVersion>
     <Platforms>x86</Platforms>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <OutputPath>..\bin\</OutputPath>
@@ -55,5 +56,11 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SAM.API\SAM.API.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Resources.Extensions" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Resources.Extensions" Version="5.0.0" />
   </ItemGroup>
 </Project>

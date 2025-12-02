@@ -15,6 +15,10 @@ npm install          # first time
 npm run dev          # hot reload; spawns SAM.Service.exe from bin/net48 with a generated SAM_API_TOKEN
 ```
 - If `SAM.Service.exe` is already running, stop it first to avoid file locks when Electron respawns it.
+- If you change C# service code, rebuild it before the next `npm run dev` so the spawned binary is current:
+```cmd
+dotnet build ..\SAM.Service\SAM.Service.csproj -c Debug -p:Platform=x86 -o ..\bin\net48
+```
 - Default service URL is `http://127.0.0.1:8787`.
 
 ## Standalone service setup
@@ -99,9 +103,9 @@ npm run package
 Bundles `upload/net48` into `resources/sam-service` inside the packaged app.
 
 ## Troubleshooting
-- “Access Denied” when starting: run the `netsh http add urlacl ...` command once as Administrator.
-- “SAM_API_TOKEN environment variable must be set”: set the token before starting.
-- “Steam not running or initialization failed”: start Steam and ensure you are logged in.
+- "Access Denied" when starting: run the `netsh http add urlacl ...` command once as Administrator.
+- "SAM_API_TOKEN environment variable must be set": set the token before starting.
+- "Steam not running or initialization failed": start Steam and ensure you are logged in.
 - 401 Unauthorized: ensure `X-SAM-Auth` matches `SAM_API_TOKEN`.
 
 ## Manual development run (service only)

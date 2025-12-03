@@ -15,6 +15,10 @@ export async function initializeAPI() {
   return apiConfig
 }
 
+export function updateAPIConfig(config: { baseUrl: string; token: string }) {
+  apiConfig = config
+}
+
 export async function apiClient<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -33,6 +37,7 @@ export async function apiClient<T>(
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}))
     const message = errorData.message || response.statusText
+    const errorCode = errorData.errorCode || errorData.error || 'unknown_error'
 
     // User-friendly error messages for common HTTP status codes
     switch (response.status) {
@@ -44,9 +49,27 @@ export async function apiClient<T>(
         throw new Error('Schema file not found. Launch the game once in Steam to download it.')
       case 408:
         throw new Error('Request timed out. Steam may be slow to respond.')
+      case 409:
+        // AppID mismatch - recoverable error
+        if (errorCode === 'app_id_mismatch') {
+          throw new Error(
+            'Steam context changed. This can happen when Steam updates or the app was recently launched. Try initializing the game again.'
+          )
+        }
+        throw new Error(message || 'Conflict with current state. Try again.')
       case 428:
         throw new Error('Game not initialized. Please select a game from the Picker first.')
       case 503:
+        // Service unavailable - Steam issues
+        if (errorCode === 'steam_install_path_failed' ||
+            errorCode === 'steam_load_failed') {
+          throw new Error('Steam is not properly installed. Please reinstall Steam.')
+        }
+        if (errorCode === 'steam_client_creation_failed' ||
+            errorCode === 'steam_pipe_creation_failed' ||
+            errorCode === 'steam_connect_failed') {
+          throw new Error('Cannot connect to Steam. Please start Steam and try again.')
+        }
         throw new Error('Steam client is not running. Please start Steam and try again.')
       default:
         throw new Error(message || `Request failed: ${response.status}`)

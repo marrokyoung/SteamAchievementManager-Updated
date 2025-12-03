@@ -4,6 +4,9 @@ export interface ElectronAPI {
   windowMinimize: () => void
   windowMaximize: () => void
   windowClose: () => void
+  startServiceForApp: (appId: number) => Promise<{ success: boolean; token: string; baseUrl: string }>
+  restartServiceNeutral: () => Promise<{ success: boolean; token: string; baseUrl: string }>
+  getCurrentAppId: () => Promise<{ appId: number | null; token: string; baseUrl: string }>
 }
 
 declare global {

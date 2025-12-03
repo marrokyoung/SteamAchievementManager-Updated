@@ -3,7 +3,6 @@ import { apiClient } from '@/lib/api'
 import type {
   Game,
   GameData,
-  InitResponse,
   AchievementUpdate,
   StatUpdate
 } from '@/types/api'
@@ -18,26 +17,11 @@ export function useGames(includeUnowned = false, refresh = false) {
   })
 }
 
-export function useInitGame() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (appId: number) =>
-      apiClient<InitResponse>('/api/init', {
-        method: 'POST',
-        body: JSON.stringify({ appId })
-      }),
-    onSuccess: (_, appId) => {
-      queryClient.invalidateQueries({ queryKey: ['gameData', appId] })
-    }
-  })
-}
-
-export function useGameData(appId: number) {
+export function useGameData(appId: number, serviceReady: boolean = true) {
   return useQuery({
     queryKey: ['gameData', appId],
     queryFn: () => apiClient<GameData>(`/api/game/${appId}/data`),
-    enabled: appId > 0
+    enabled: serviceReady && appId > 0
   })
 }
 

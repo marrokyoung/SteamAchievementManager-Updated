@@ -3,12 +3,12 @@ import type React from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   useGameData,
-  useInitGame,
   useUpdateAchievements,
   useUpdateStats,
   useStoreChanges,
   useResetStats
 } from '@/hooks/useGameQueries'
+import { updateAPIConfig } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Input } from '@/components/ui/input'
@@ -36,7 +36,6 @@ import type { GameData, Achievement, Stat } from '@/types/api'
 export default function ManagerView() {
   const { appId } = useParams<{ appId: string }>()
   const navigate = useNavigate()
-  const initGame = useInitGame()
 
   // Guard against missing or invalid appId
   const numericAppId = appId ? Number(appId) : NaN
@@ -49,9 +48,11 @@ export default function ManagerView() {
   const [statInputs, setStatInputs] = useState<Map<string, string>>(new Map())
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
   const [includeAchievements, setIncludeAchievements] = useState(false)
+  const [isReturningToPicker, setIsReturningToPicker] = useState(false)
+  const [serviceReady, setServiceReady] = useState(false)
 
-  // Queries and mutations
-  const { data: gameData, isLoading, error, refetch, isRefetching } = useGameData(numericAppId)
+  // Queries and mutations - only enable after service is ready
+  const { data: gameData, isLoading, error, refetch, isRefetching } = useGameData(numericAppId, serviceReady)
   const updateAchievementsMutation = useUpdateAchievements(numericAppId)
   const updateStatsMutation = useUpdateStats(numericAppId)
   const storeChangesMutation = useStoreChanges(numericAppId)
@@ -80,14 +81,61 @@ export default function ManagerView() {
       return
     }
 
-    // Initialize the game when the view loads and handle errors
-    initGame.mutateAsync(numericAppId).catch((err) => {
-      toast({
-        title: 'Failed to initialize game',
-        description: (err as Error).message,
-        variant: 'destructive'
-      })
-    })
+    const ensureServiceInitialized = async () => {
+      try {
+        const bridge = window.electron
+        if (!bridge?.startServiceForApp) {
+          // Browser mode - no service restart needed
+          setServiceReady(true)
+          return
+        }
+
+        // If service already running for this app, reuse current config
+        const current = await bridge.getCurrentAppId?.()
+        if (current && current.appId === numericAppId) {
+          updateAPIConfig({ baseUrl: current.baseUrl, token: current.token })
+          setServiceReady(true)
+          return
+        }
+
+        // Restart service to ensure clean state and correct forced mode
+        const result = await bridge.startServiceForApp(numericAppId)
+
+        // CRITICAL: Update API config with new token before any data fetch
+        updateAPIConfig({ baseUrl: result.baseUrl, token: result.token })
+
+        // Signal that service is ready and queries can fire
+        setServiceReady(true)
+      } catch (err) {
+        const errorMessage = (err as Error).message || ''
+
+        // If restart already in progress, fall back to getConfig to pick up current token
+        if (errorMessage.includes('restart already in progress')) {
+          console.warn('Service restart in progress, using current config')
+          try {
+            const bridge = window.electron
+            if (bridge?.getConfig) {
+              const config = await bridge.getConfig()
+              updateAPIConfig({ baseUrl: config.baseUrl, token: config.token })
+              setServiceReady(true)
+              return
+            }
+          } catch (fallbackErr) {
+            console.error('Failed to get config:', fallbackErr)
+          }
+        }
+
+        console.error('Failed to initialize service:', err)
+        toast({
+          title: 'Initialization Error',
+          description: 'Failed to start service for this game',
+          variant: 'destructive'
+        })
+        navigate('/')
+      }
+    }
+
+    ensureServiceInitialized()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appId, numericAppId, navigate])
 
@@ -277,30 +325,39 @@ export default function ManagerView() {
     })
   }
 
-  // Loading overlay
-  const showLoadingOverlay = isSaving || isRefetching || resetMutation.isPending
+  // Back to picker flow
+  const handleBackToPicker = async () => {
+    setIsReturningToPicker(true)
 
-  // Show init error
-  if (initGame.isError) {
-    return (
-      <div className="container mx-auto p-6">
-        <div className="max-w-md mx-auto text-center py-12">
-          <AlertCircle className="h-16 w-16 text-destructive mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Failed to initialize game</h2>
-          <p className="text-muted-foreground mb-4">
-            {(initGame.error as Error)?.message || 'Unknown error'}
-          </p>
-          <p className="text-sm text-muted-foreground mb-6">
-            Make sure Steam is running and you own this game.
-          </p>
-          <Button onClick={() => navigate('/')}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Game Selection
-          </Button>
-        </div>
-      </div>
-    )
+    try {
+      const bridge = window.electron
+      if (!bridge?.restartServiceNeutral) {
+        navigate('/')
+        return
+      }
+
+      // Restart in neutral mode (no SAM_FORCE_APP_ID)
+      const result = await bridge.restartServiceNeutral()
+
+      // CRITICAL: Update API config before navigation
+      updateAPIConfig({ baseUrl: result.baseUrl, token: result.token })
+
+      navigate('/')
+    } catch (err) {
+      console.error('Failed to restart service:', err)
+      toast({
+        title: 'Warning',
+        description: 'Service restart failed. Navigating to picker anyway.',
+        variant: 'destructive'
+      })
+      navigate('/')
+    } finally {
+      setIsReturningToPicker(false)
+    }
   }
+
+  // Loading overlay
+  const showLoadingOverlay = isSaving || isRefetching || resetMutation.isPending || isReturningToPicker
 
   // Show fetch error
   if (error) {
@@ -345,6 +402,7 @@ export default function ManagerView() {
               {isSaving && 'Saving changes...'}
               {isRefetching && 'Refreshing data...'}
               {resetMutation.isPending && 'Resetting stats...'}
+              {isReturningToPicker && 'Returning to game picker...'}
             </p>
           </div>
         </div>
@@ -412,7 +470,7 @@ export default function ManagerView() {
             <RefreshCw className={cn('h-4 w-4', isRefetching && 'animate-spin')} />
           </Button>
 
-          <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
+          <Button variant="ghost" size="icon" onClick={handleBackToPicker} disabled={isReturningToPicker}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </div>

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Gamepad2, RefreshCw, Loader2 } from 'lucide-react'
-import { useGames, useInitGame } from '@/hooks/useGameQueries'
+import { useGames } from '@/hooks/useGameQueries'
+import { updateAPIConfig } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/use-toast'
@@ -22,20 +23,37 @@ export default function PickerView() {
   const [activeFilters, setActiveFilters] = useState<Set<string>>(
     new Set(['game', 'demo', 'mod', 'junk'])
   )
+  const [isRestartingService, setIsRestartingService] = useState(false)
 
   const { data: games, isLoading, error, refetch } = useGames(showUnowned, false)
-  const initGame = useInitGame()
 
   const handleGameSelect = async (appId: number) => {
+    if (isRestartingService) return // Prevent double-clicks
+
+    setIsRestartingService(true)
     try {
-      await initGame.mutateAsync(appId)
+      const bridge = window.electron
+      if (!bridge?.startServiceForApp) {
+        throw new Error('Electron bridge not available')
+      }
+
+      // Restart service with forced AppId
+      const result = await bridge.startServiceForApp(appId)
+
+      // CRITICAL: Update API config with new token BEFORE navigation
+      updateAPIConfig({ baseUrl: result.baseUrl, token: result.token })
+
+      // Navigate to manager (service already initialized)
       navigate(`/manager/${appId}`)
     } catch (err) {
+      console.error('Failed to start service for app:', err)
       toast({
         title: 'Failed to initialize game',
-        description: (err as Error).message,
+        description: (err as Error).message || 'Could not restart service',
         variant: 'destructive'
       })
+    } finally {
+      setIsRestartingService(false)
     }
   }
 
@@ -131,7 +149,7 @@ export default function PickerView() {
               key={game.id}
               game={game}
               onClick={handleGameSelect}
-              isInitializing={initGame.isPending}
+              isInitializing={isRestartingService}
             />
           ))}
         </div>

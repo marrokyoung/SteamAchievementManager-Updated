@@ -40,10 +40,16 @@ namespace SAM.Service.Controllers
                     return BadRequest("Invalid AppId");
                 }
 
+                API.SecurityLogger.Log(API.LogLevel.Info, API.LogContext.HTTP,
+                    $"POST /api/init - AppId {request.AppId}");
+
                 ClientManager.InitializeForApp(request.AppId);
 
                 var client = ClientManager.GetClient();
                 var gameName = client.SteamApps001.GetAppData((uint)request.AppId, "name");
+
+                API.SecurityLogger.Log(API.LogLevel.Info, API.LogContext.HTTP,
+                    $"Successfully initialized for AppId {request.AppId}");
 
                 return Ok(new
                 {
@@ -56,17 +62,30 @@ namespace SAM.Service.Controllers
             {
                 return BadRequest(ex.Message);
             }
-            catch (InvalidOperationException ex) when (ex.Message == "steam_not_running" || ex.Message == "init_failed")
+            catch (API.ClientInitializeException ex)
             {
-                return Content(HttpStatusCode.ServiceUnavailable, new ErrorResponse
+                // Extract error details from exception methods
+                int httpStatus = ex.GetHttpStatusCode();
+                string errorCode = ex.GetErrorCode();
+                bool recoverable = ex.IsRecoverable();
+
+                API.SecurityLogger.Log(API.LogLevel.Warning, API.LogContext.HTTP,
+                    $"Init failed with {errorCode} (HTTP {httpStatus}): {ex.Message}");
+
+                return Content((HttpStatusCode)httpStatus, new ErrorResponse
                 {
-                    Error = ex.Message,
-                    Message = ex.InnerException?.Message ?? "Steam client initialization failed",
-                    StatusCode = 503
+                    Error = errorCode,
+                    Message = ex.Message,
+                    ErrorCode = errorCode,
+                    StatusCode = httpStatus,
+                    Recoverable = recoverable
                 });
             }
             catch (Exception ex)
             {
+                API.SecurityLogger.Log(API.LogLevel.Error, API.LogContext.HTTP,
+                    $"Unexpected error in /api/init: {ex.Message}");
+
                 return InternalServerError(ex);
             }
         }
@@ -80,6 +99,14 @@ namespace SAM.Service.Controllers
         {
             try
             {
+                // In forced mode, skip AppId 0 init and reuse existing client
+                if (ServiceContext.ForcedAppId != null)
+                {
+                    var client = ClientManager.GetClient();
+                    var games = await Task.Run(() => GameListCache.GetGames(client, includeUnowned, refresh));
+                    return Ok(games);
+                }
+
                 // Initialize with AppId 0 (neutral client) if not already initialized
                 try
                 {
@@ -90,18 +117,25 @@ namespace SAM.Service.Controllers
                     ClientManager.InitializeForApp(0);
                 }
 
-                var client = ClientManager.GetClient();
-                var games = await Task.Run(() => GameListCache.GetGames(client, includeUnowned, refresh));
+                var client2 = ClientManager.GetClient();
+                var games2 = await Task.Run(() => GameListCache.GetGames(client2, includeUnowned, refresh));
 
-                return Ok(games);
+                return Ok(games2);
             }
-            catch (InvalidOperationException ex) when (ex.Message == "steam_not_running" || ex.Message == "init_failed")
+            catch (API.ClientInitializeException ex)
             {
-                return Content(HttpStatusCode.ServiceUnavailable, new ErrorResponse
+                int httpStatus = ex.GetHttpStatusCode();
+                string errorCode = ex.GetErrorCode();
+
+                API.SecurityLogger.Log(API.LogLevel.Warning, API.LogContext.HTTP,
+                    $"GetGames init failed: {errorCode}");
+
+                return Content((HttpStatusCode)httpStatus, new ErrorResponse
                 {
-                    Error = ex.Message,
-                    Message = "Steam not running or initialization failed",
-                    StatusCode = 503
+                    Error = errorCode,
+                    Message = ex.Message,
+                    ErrorCode = errorCode,
+                    StatusCode = httpStatus
                 });
             }
             catch (Exception ex)
@@ -222,13 +256,20 @@ namespace SAM.Service.Controllers
                     StatusCode = 408
                 });
             }
-            catch (InvalidOperationException ex) when (ex.Message == "steam_not_running" || ex.Message == "init_failed")
+            catch (API.ClientInitializeException ex)
             {
-                return Content(HttpStatusCode.ServiceUnavailable, new ErrorResponse
+                int httpStatus = ex.GetHttpStatusCode();
+                string errorCode = ex.GetErrorCode();
+
+                API.SecurityLogger.Log(API.LogLevel.Warning, API.LogContext.HTTP,
+                    $"GetGameData init failed for AppId {appId}: {errorCode}");
+
+                return Content((HttpStatusCode)httpStatus, new ErrorResponse
                 {
-                    Error = ex.Message,
-                    Message = "Steam not running or initialization failed",
-                    StatusCode = 503
+                    Error = errorCode,
+                    Message = ex.Message,
+                    ErrorCode = errorCode,
+                    StatusCode = httpStatus
                 });
             }
             catch (Exception ex)
@@ -290,6 +331,22 @@ namespace SAM.Service.Controllers
                 }
 
                 return Ok(new { updated = updatedCount });
+            }
+            catch (API.ClientInitializeException ex)
+            {
+                int httpStatus = ex.GetHttpStatusCode();
+                string errorCode = ex.GetErrorCode();
+
+                API.SecurityLogger.Log(API.LogLevel.Warning, API.LogContext.HTTP,
+                    $"UpdateAchievements init failed for AppId {appId}: {errorCode}");
+
+                return Content((HttpStatusCode)httpStatus, new ErrorResponse
+                {
+                    Error = errorCode,
+                    Message = ex.Message,
+                    ErrorCode = errorCode,
+                    StatusCode = httpStatus
+                });
             }
             catch (InvalidOperationException ex)
             {
@@ -453,6 +510,22 @@ namespace SAM.Service.Controllers
 
                 return Ok(new { updated = updatedCount });
             }
+            catch (API.ClientInitializeException ex)
+            {
+                int httpStatus = ex.GetHttpStatusCode();
+                string errorCode = ex.GetErrorCode();
+
+                API.SecurityLogger.Log(API.LogLevel.Warning, API.LogContext.HTTP,
+                    $"UpdateStats init failed for AppId {appId}: {errorCode}");
+
+                return Content((HttpStatusCode)httpStatus, new ErrorResponse
+                {
+                    Error = errorCode,
+                    Message = ex.Message,
+                    ErrorCode = errorCode,
+                    StatusCode = httpStatus
+                });
+            }
             catch (InvalidOperationException ex)
             {
                 return Content((HttpStatusCode)428, new ErrorResponse
@@ -488,6 +561,22 @@ namespace SAM.Service.Controllers
                 }
 
                 return Ok(new { message = "Changes stored successfully" });
+            }
+            catch (API.ClientInitializeException ex)
+            {
+                int httpStatus = ex.GetHttpStatusCode();
+                string errorCode = ex.GetErrorCode();
+
+                API.SecurityLogger.Log(API.LogLevel.Warning, API.LogContext.HTTP,
+                    $"Store init failed for AppId {appId}: {errorCode}");
+
+                return Content((HttpStatusCode)httpStatus, new ErrorResponse
+                {
+                    Error = errorCode,
+                    Message = ex.Message,
+                    ErrorCode = errorCode,
+                    StatusCode = httpStatus
+                });
             }
             catch (InvalidOperationException ex)
             {
@@ -529,6 +618,22 @@ namespace SAM.Service.Controllers
                 {
                     message = "Stats reset successfully",
                     achievementsReset = achievementsToo
+                });
+            }
+            catch (API.ClientInitializeException ex)
+            {
+                int httpStatus = ex.GetHttpStatusCode();
+                string errorCode = ex.GetErrorCode();
+
+                API.SecurityLogger.Log(API.LogLevel.Warning, API.LogContext.HTTP,
+                    $"Reset init failed for AppId {appId}: {errorCode}");
+
+                return Content((HttpStatusCode)httpStatus, new ErrorResponse
+                {
+                    Error = errorCode,
+                    Message = ex.Message,
+                    ErrorCode = errorCode,
+                    StatusCode = httpStatus
                 });
             }
             catch (InvalidOperationException ex)

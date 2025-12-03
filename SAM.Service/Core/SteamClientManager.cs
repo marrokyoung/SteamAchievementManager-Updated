@@ -29,6 +29,25 @@ namespace SAM.Service.Core
         }
 
         /// <summary>
+        /// Determines if exception is a recoverable AppID mismatch
+        /// </summary>
+        private static bool IsRecoverableAppIdMismatch(ClientInitializeException ex)
+        {
+            return ex?.Failure == ClientInitializeFailure.AppIdMismatch;
+        }
+
+        /// <summary>
+        /// Gets diagnostic info for logging
+        /// </summary>
+        private static string GetInitDiagnostics(ClientInitializeException ex)
+        {
+            if (ex == null)
+                return "No exception details";
+
+            return $"Failure={ex.Failure}, ErrorCode={ex.GetErrorCode()}, Message={ex.Message}";
+        }
+
+        /// <summary>
         /// Initialize Steam client for a specific AppId (idempotent)
         /// </summary>
         public void InitializeForApp(long appId)
@@ -45,11 +64,53 @@ namespace SAM.Service.Core
                 // Already initialized for this app?
                 if (_currentClient != null && _currentAppId == appId)
                 {
+                    API.SecurityLogger.Log(API.LogLevel.Info, API.LogContext.Native,
+                        $"Steam client already initialized for AppId {appId}, skipping");
                     return;
                 }
 
                 // Dispose existing client if switching apps
                 DisposeCurrentClient();
+
+                try
+                {
+                    InitializeClientWithRetry(appId);
+                }
+                catch (ClientInitializeException ex)
+                {
+                    // Log the specific failure for diagnostics
+                    API.SecurityLogger.Log(API.LogLevel.Error, API.LogContext.Native,
+                        $"Failed to initialize for AppId {appId}: {GetInitDiagnostics(ex)}");
+
+                    // Clean up on failure
+                    DisposeCurrentClient();
+
+                    // Re-throw to preserve exception details (HTTP layer will handle)
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    // Clean up on failure
+                    DisposeCurrentClient();
+
+                    // Log unexpected errors
+                    API.SecurityLogger.Log(API.LogLevel.Error, API.LogContext.Native,
+                        $"Unexpected initialization error for AppId {appId}: {ex.Message}");
+
+                    // Re-throw (don't wrap in InvalidOperationException)
+                    throw;
+                }
+            }
+        }
+
+        private void InitializeClientWithRetry(long appId)
+        {
+            const int maxRetries = 1;
+            int attemptCount = 0;
+
+            while (attemptCount < maxRetries + 1)
+            {
+                attemptCount++;
 
                 try
                 {
@@ -63,22 +124,26 @@ namespace SAM.Service.Core
 
                     API.SecurityLogger.Log(API.LogLevel.Info, API.LogContext.Native,
                         $"Steam client initialized for AppId {appId}");
+                    return; // Success
                 }
-                catch (Exception ex)
+                catch (ClientInitializeException ex) when (IsRecoverableAppIdMismatch(ex) && attemptCount == 1)
                 {
-                    // Clean up on failure
+                    // First attempt failed with AppID mismatch - dispose and retry
+                    API.SecurityLogger.Log(API.LogLevel.Warning, API.LogContext.Native,
+                        $"AppID mismatch on attempt {attemptCount}: {ex.Message}. Disposing and retrying...");
+
                     DisposeCurrentClient();
-
-                    // Determine error type
-                    string errorCode = "init_failed";
-                    if (ex.Message.Contains("Steam") || ex.Message.Contains("steam"))
-                    {
-                        errorCode = "steam_not_running";
-                    }
-
-                    throw new InvalidOperationException(errorCode, ex);
+                    // Loop will retry with new client instance
+                    continue;
+                }
+                catch (ClientInitializeException)
+                {
+                    // Non-mismatch failure or second mismatch attempt - propagate
+                    throw;
                 }
             }
+
+            throw new InvalidOperationException("Failed to initialize Steam client after retries");
         }
 
         /// <summary>

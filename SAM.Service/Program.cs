@@ -1,4 +1,5 @@
 using System;
+using System.Net;
 using System.Threading;
 using Microsoft.Owin.Hosting;
 using SAM.Service.Core;
@@ -26,14 +27,50 @@ namespace SAM.Service
                 baseUrl = args[0];
             }
 
+            // Read forced AppId from environment
+            string forcedAppIdStr = Environment.GetEnvironmentVariable("SAM_FORCE_APP_ID");
+            long? forcedAppId = null;
+
+            if (!string.IsNullOrWhiteSpace(forcedAppIdStr))
+            {
+                if (long.TryParse(forcedAppIdStr, out long parsed) && parsed > 0)
+                {
+                    forcedAppId = parsed;
+                    Console.WriteLine($"Forced AppId mode: {forcedAppId}");
+                }
+                else
+                {
+                    Console.WriteLine($"Invalid SAM_FORCE_APP_ID: {forcedAppIdStr}");
+                    Environment.Exit(1);
+                }
+            }
+
             _shutdownToken = new CancellationTokenSource();
 
             try
             {
-                // Initialize managers (no Steam connection yet)
+                // Initialize managers
                 _clientManager = new SteamClientManager();
                 _gameListCache = new GameListCache();
-                ServiceContext.Initialize(_clientManager, _gameListCache);
+
+                // Auto-initialize if forced mode
+                if (forcedAppId.HasValue)
+                {
+                    try
+                    {
+                        Console.WriteLine($"Auto-initializing for AppId {forcedAppId.Value}...");
+                        _clientManager.InitializeForApp(forcedAppId.Value);
+                        Console.WriteLine("Auto-initialization successful");
+                    }
+                    catch (API.ClientInitializeException ex)
+                    {
+                        PrintFatalException(ex);
+                        Cleanup();
+                        Environment.Exit(1);
+                    }
+                }
+
+                ServiceContext.Initialize(_clientManager, _gameListCache, forcedAppId);
 
                 // Start OWIN web server
                 _webApp = WebApp.Start<Startup>(baseUrl);
@@ -46,14 +83,44 @@ namespace SAM.Service
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Fatal error: {ex.Message}");
-                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                PrintFatalException(ex);
                 Environment.Exit(1);
             }
             finally
             {
                 Cleanup();
             }
+        }
+
+        private static void PrintFatalException(Exception ex)
+        {
+            Console.WriteLine($"Fatal error: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.WriteLine($"Inner exception: {ex.InnerException.Message}");
+            }
+
+            var httpListenerEx = FindHttpListenerException(ex);
+            if (httpListenerEx != null && httpListenerEx.ErrorCode == 5)
+            {
+                Console.WriteLine("Access denied starting HTTP listener. Run once as Administrator:");
+                Console.WriteLine("  netsh http add urlacl url=http://127.0.0.1:8787/ user=Everyone");
+            }
+
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+        }
+
+        private static HttpListenerException FindHttpListenerException(Exception ex)
+        {
+            while (ex != null)
+            {
+                if (ex is HttpListenerException listenerEx)
+                {
+                    return listenerEx;
+                }
+                ex = ex.InnerException;
+            }
+            return null;
         }
 
         private static void OnShutdown(object sender, ConsoleCancelEventArgs e)

@@ -7,11 +7,13 @@ namespace SAM.Service.Core
     {
         public static SteamClientManager ClientManager { get; private set; }
         public static GameListCache GameListCache { get; private set; }
+        public static long? ForcedAppId { get; private set; }
 
-        public static void Initialize(SteamClientManager clientManager, GameListCache gameListCache)
+        public static void Initialize(SteamClientManager clientManager, GameListCache gameListCache, long? forcedAppId = null)
         {
             ClientManager = clientManager;
             GameListCache = gameListCache;
+            ForcedAppId = forcedAppId;
         }
     }
 }

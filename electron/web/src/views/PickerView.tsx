@@ -1,31 +1,72 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Gamepad2, RefreshCw, Loader2 } from 'lucide-react'
+import { Search, Gamepad2, RefreshCw, Loader2, Filter } from 'lucide-react'
 import { useGames } from '@/hooks/useGameQueries'
 import { updateAPIConfig } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import type { Game } from '@/types/api'
 
 const GAME_TYPES = [
-  { value: 'game', label: 'Normal', color: 'blue' },
-  { value: 'demo', label: 'Demo', color: 'green' },
-  { value: 'mod', label: 'Mod', color: 'purple' },
+  { value: 'normal', label: 'Games', color: 'blue' },
+  { value: 'demo', label: 'Demos', color: 'green' },
+  { value: 'mod', label: 'Mods', color: 'purple' },
   { value: 'junk', label: 'Junk', color: 'gray' }
 ] as const
+
+const normalizeGameType = (type: string) => {
+  if (type === 'game' || type === 'normal') return 'normal'
+  if (type === 'demo') return 'demo'
+  if (type === 'mod') return 'mod'
+  if (type === 'junk') return 'junk'
+  // Default unknown types to 'normal' for safety
+  return 'normal'
+}
 
 export default function PickerView() {
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState('')
-  const [showUnowned, setShowUnowned] = useState(false)
-  const [activeFilters, setActiveFilters] = useState<Set<string>>(
-    new Set(['game', 'demo', 'mod', 'junk'])
-  )
+
+  // Load filter state from localStorage, default to 'normal' (Games) on first load
+  const [showAllTypes, setShowAllTypes] = useState(() => {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('sam-showAllTypes')
+      return saved ? JSON.parse(saved) : false
+    }
+    return false
+  })
+
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(() => {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('sam-activeFilters')
+      if (saved) {
+        return new Set(JSON.parse(saved))
+      }
+    }
+    return new Set(['normal']) // Default: Games selected on first load
+  })
+
+  const [previousFilters, setPreviousFilters] = useState<Set<string>>(new Set())
   const [isRestartingService, setIsRestartingService] = useState(false)
 
-  const { data: games, isLoading, error, refetch } = useGames(showUnowned, false)
+  // Persist filter state to localStorage
+  useEffect(() => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('sam-showAllTypes', JSON.stringify(showAllTypes))
+      localStorage.setItem('sam-activeFilters', JSON.stringify(Array.from(activeFilters)))
+    }
+  }, [showAllTypes, activeFilters])
+
+  const { data: games, isLoading, error, refetch } = useGames(false, false)
 
   const handleGameSelect = async (appId: number) => {
     if (isRestartingService) return // Prevent double-clicks
@@ -57,19 +98,10 @@ export default function PickerView() {
     }
   }
 
-  const toggleFilter = (type: string) => {
-    const next = new Set(activeFilters)
-    if (next.has(type)) {
-      next.delete(type)
-    } else {
-      next.add(type)
-    }
-    setActiveFilters(next)
-  }
-
   const filteredGames = games?.filter(game => {
     const matchesSearch = game.name.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesType = activeFilters.size === 0 || activeFilters.has(game.type)
+    const gameType = normalizeGameType(game.type)
+    const matchesType = activeFilters.size === 0 || activeFilters.has(gameType)
     return matchesSearch && matchesType
   }) || []
 
@@ -90,8 +122,8 @@ export default function PickerView() {
       <div className="mb-6">
         <h2 className="text-2xl font-bold mb-4">Select a Game</h2>
 
-        {/* Search and ownership filter */}
-        <div className="flex gap-4 mb-4">
+        {/* Search and filter controls */}
+        <div className="flex gap-2 mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
             <Input
@@ -102,29 +134,63 @@ export default function PickerView() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <Button
-            variant={showUnowned ? 'default' : 'outline'}
-            onClick={() => setShowUnowned(!showUnowned)}
-          >
-            {showUnowned ? 'Show Owned Only' : 'Show All Games'}
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => refetch()}>
+
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant={activeFilters.size > 0 && !showAllTypes ? 'default' : 'outline'}
+                size="sm"
+              >
+                <Filter className="h-4 w-4 mr-2" />
+                Filter Types
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {/* Individual game type filters */}
+              {GAME_TYPES.map(type => (
+                <DropdownMenuCheckboxItem
+                  key={type.value}
+                  checked={activeFilters.has(type.value)}
+                  disabled={showAllTypes}
+                  onSelect={(e) => e.preventDefault()}
+                  onCheckedChange={(checked) => {
+                    const next = new Set(activeFilters)
+                    if (checked) next.add(type.value)
+                    else next.delete(type.value)
+                    setActiveFilters(next)
+                  }}
+                >
+                  {type.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+
+              {/* Separator */}
+              <DropdownMenuSeparator />
+
+              {/* "All Types" toggle */}
+              <DropdownMenuCheckboxItem
+                checked={showAllTypes}
+                onSelect={(e) => e.preventDefault()}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    // Turning ON: save current filters and show all types
+                    setPreviousFilters(new Set(activeFilters))
+                    setActiveFilters(new Set()) // Empty set = show all
+                  } else {
+                    // Turning OFF: restore previous filter selection
+                    setActiveFilters(new Set(previousFilters))
+                  }
+                  setShowAllTypes(checked)
+                }}
+              >
+                All Types
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button variant="ghost" size="icon" onClick={() => refetch()} title="Refresh games">
             <RefreshCw className="h-4 w-4" />
           </Button>
-        </div>
-
-        {/* Type filters */}
-        <div className="flex gap-2">
-          {GAME_TYPES.map(type => (
-            <Button
-              key={type.value}
-              variant={activeFilters.has(type.value) ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => toggleFilter(type.value)}
-            >
-              {type.label}
-            </Button>
-          ))}
         </div>
       </div>
 
@@ -179,7 +245,8 @@ function GameCard({
   onClick: (appId: number) => void
   isInitializing: boolean
 }) {
-  const typeConfig = GAME_TYPES.find(t => t.value === game.type)
+  const normalizedType = normalizeGameType(game.type)
+  const typeConfig = GAME_TYPES.find(t => t.value === normalizedType)
 
   return (
     <button
@@ -232,10 +299,10 @@ function GameCard({
             <span
               className={cn(
                 'text-xs px-2 py-0.5 rounded font-medium',
-                game.type === 'demo' && 'bg-green-500/80 text-white',
-                game.type === 'mod' && 'bg-purple-500/80 text-white',
-                game.type === 'junk' && 'bg-gray-500/80 text-white',
-                game.type === 'game' && 'bg-blue-500/80 text-white'
+                normalizedType === 'demo' && 'bg-green-500/80 text-white',
+                normalizedType === 'mod' && 'bg-purple-500/80 text-white',
+                normalizedType === 'junk' && 'bg-gray-500/80 text-white',
+                normalizedType === 'normal' && 'bg-blue-500/80 text-white'
               )}
             >
               {typeConfig.label}

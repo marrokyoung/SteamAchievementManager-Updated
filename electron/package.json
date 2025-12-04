@@ -10,7 +10,12 @@
     "prepackage": "npm run build:service",
     "package": "npm run build && electron-builder"
   },
-  "keywords": ["steam", "achievements", "manager", "electron"],
+  "keywords": [
+    "steam",
+    "achievements",
+    "manager",
+    "electron"
+  ],
   "author": "Steam Achievement Manager Contributors",
   "license": "GPL-3.0",
   "description": "Steam Achievement Manager - Manage achievements and statistics for Steam games",
@@ -57,7 +62,10 @@
       {
         "from": "../upload/net48",
         "to": "sam-service",
-        "filter": ["SAM.Service.exe", "*.dll"]
+        "filter": [
+          "SAM.Service.exe",
+          "*.dll"
+        ]
       }
     ],
     "files": [

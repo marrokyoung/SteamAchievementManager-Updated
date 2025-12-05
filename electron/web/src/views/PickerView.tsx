@@ -117,15 +117,25 @@ export default function PickerView() {
   }
 
   return (
-    <div className="container mx-auto p-6">
+    <div className="container relative mx-auto max-w-7xl p-6 md:p-10">
       {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold mb-4">Select a Game</h2>
+      <div className="mb-6 space-y-2">
+        <span className="text-xs uppercase tracking-[0.2em] text-primary/80">
+          Library
+        </span>
+        <h2 className="text-3xl font-bold text-white">
+          Select a Game
+        </h2>
+        <p className="text-sm text-muted-foreground/80">
+          Search your Steam catalog, filter by type, and jump straight into managing achievements.
+        </p>
+      </div>
 
-        {/* Search and filter controls */}
-        <div className="flex gap-2 mb-4">
+      {/* Search and filter controls */}
+      <div className="mb-8 rounded-2xl border border-white/10 bg-white/5 p-5 shadow-[0_20px_70px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/70" />
             <Input
               type="text"
               placeholder="Search games..."
@@ -140,12 +150,13 @@ export default function PickerView() {
               <Button
                 variant={activeFilters.size > 0 && !showAllTypes ? 'default' : 'outline'}
                 size="sm"
+                className="min-w-[140px]"
               >
                 <Filter className="h-4 w-4 mr-2" />
                 Filter Types
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
+            <DropdownMenuContent align="start" className="mt-1">
               {/* Individual game type filters */}
               {GAME_TYPES.map(type => (
                 <DropdownMenuCheckboxItem
@@ -188,28 +199,36 @@ export default function PickerView() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button variant="ghost" size="icon" onClick={() => refetch()} title="Refresh games">
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={() => refetch()} 
+            title="Refresh games"
+          >
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
-      </div>
 
-      {/* Results count */}
-      {!isLoading && (
-        <p className="text-sm text-muted-foreground mb-4">
-          Showing {filteredGames.length} of {games?.length || 0} games
-        </p>
-      )}
+        {/* Results count */}
+        {!isLoading && (
+          <p className="text-xs text-muted-foreground/80 mt-3">
+            Showing {filteredGames.length} of {games?.length || 0} games
+          </p>
+        )}
+      </div>
 
       {/* Game grid */}
       {isLoading ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
           {[...Array(15)].map((_, i) => (
-            <div key={i} className="h-40 bg-muted animate-pulse rounded-lg" />
+            <div
+              key={i}
+              className="h-44 rounded-xl border border-white/10 bg-white/5 shadow-[0_15px_45px_rgba(0,0,0,0.45)] animate-pulse"
+            />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
           {filteredGames.map(game => (
             <GameCard
               key={game.id}
@@ -223,10 +242,10 @@ export default function PickerView() {
 
       {/* Empty state */}
       {!isLoading && filteredGames.length === 0 && (
-        <div className="text-center py-12">
-          <Gamepad2 className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-          <p className="text-lg font-medium text-muted-foreground mb-2">No games found</p>
-          <p className="text-sm text-muted-foreground">
+        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-12 text-center shadow-[0_18px_55px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+          <Gamepad2 className="h-16 w-16 text-muted-foreground/70 mx-auto mb-4" />
+          <p className="text-lg font-semibold text-white mb-2">No games found</p>
+          <p className="text-sm text-muted-foreground/80">
             Try adjusting your search or filters
           </p>
         </div>
@@ -253,13 +272,14 @@ function GameCard({
       onClick={() => onClick(game.id)}
       disabled={isInitializing}
       className={cn(
-        'group relative h-40 overflow-hidden rounded-lg border-2 transition-all',
-        'hover:scale-105 hover:shadow-xl',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'group relative h-44 overflow-hidden rounded-xl border transition-all duration-200',
+        'bg-white/5 border-white/10 shadow-[0_15px_45px_rgba(0,0,0,0.45)] hover:-translate-y-1',
+        'hover:shadow-[0_20px_55px_rgba(124,58,237,0.35)]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(140,97,255,0.65)] focus-visible:ring-offset-0',
         'disabled:opacity-50 disabled:cursor-not-allowed',
         game.owned
-          ? 'border-primary/50 bg-card hover:border-primary'
-          : 'border-muted bg-muted/50 hover:border-yellow-500'
+          ? 'border-primary/35 hover:border-primary/70'
+          : 'border-yellow-400/40 hover:border-yellow-400/70'
       )}
     >
       {/* Image or placeholder */}
@@ -268,20 +288,20 @@ function GameCard({
           <img
             src={game.imageUrl}
             alt={game.name}
-            className="w-full h-full object-cover transition-transform group-hover:scale-110"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
             onError={(e) => {
               // Fallback to placeholder on image load error
               e.currentTarget.style.display = 'none'
             }}
           />
         ) : (
-          <div className="flex items-center justify-center h-full bg-gradient-to-br from-muted to-muted/50">
-            <Gamepad2 className="h-16 w-16 text-muted-foreground/30" />
+          <div className="flex items-center justify-center h-full bg-gradient-to-br from-[#221239] via-[#140d26] to-[#0c0818]">
+            <Gamepad2 className="h-16 w-16 text-muted-foreground/40" />
           </div>
         )}
 
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent" />
       </div>
 
       {/* Content overlay */}
@@ -290,7 +310,7 @@ function GameCard({
 
         <div className="flex items-center gap-2">
           {!game.owned && (
-            <span className="text-xs bg-yellow-500 text-yellow-950 px-2 py-0.5 rounded font-medium">
+            <span className="text-xs bg-yellow-400/90 text-yellow-950 px-2 py-0.5 rounded-full font-semibold shadow-sm">
               Not Owned
             </span>
           )}
@@ -298,11 +318,11 @@ function GameCard({
           {typeConfig && (
             <span
               className={cn(
-                'text-xs px-2 py-0.5 rounded font-medium',
-                normalizedType === 'demo' && 'bg-green-500/80 text-white',
-                normalizedType === 'mod' && 'bg-purple-500/80 text-white',
-                normalizedType === 'junk' && 'bg-gray-500/80 text-white',
-                normalizedType === 'normal' && 'bg-blue-500/80 text-white'
+                'text-xs px-2 py-0.5 rounded-full font-semibold border border-white/10 bg-white/10 text-white shadow-sm',
+                normalizedType === 'demo' && 'bg-emerald-400/30 text-emerald-100 border-emerald-200/40',
+                normalizedType === 'mod' && 'bg-purple-500/30 text-purple-100 border-purple-200/40',
+                normalizedType === 'junk' && 'bg-slate-500/30 text-slate-100 border-slate-200/30',
+                normalizedType === 'normal' && 'bg-blue-500/30 text-blue-100 border-blue-200/40'
               )}
             >
               {typeConfig.label}

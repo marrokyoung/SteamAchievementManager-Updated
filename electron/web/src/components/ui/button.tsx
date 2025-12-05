@@ -4,16 +4,16 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 disabled:pointer-events-none disabled:opacity-50 shadow-[0_8px_26px_rgba(0,0,0,0.35)] hover:-translate-y-[1px] active:translate-y-0 backdrop-blur-sm',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-        outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        ghost: 'hover:bg-accent hover:text-accent-foreground',
-        link: 'text-primary underline-offset-4 hover:underline',
+        default: 'bg-gradient-to-r from-[#7c3aed] via-[#8b5cf6] to-[#6366f1] text-primary-foreground hover:shadow-[0_12px_32px_rgba(120,60,255,0.45)]',
+        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90 hover:shadow-[0_12px_32px_rgba(248,113,113,0.35)]',
+        outline: 'border border-white/20 bg-white/5 text-foreground hover:border-primary/60 hover:bg-white/10 hover:shadow-[0_10px_30px_rgba(120,60,255,0.25)]',
+        secondary: 'border border-white/10 bg-secondary/70 text-secondary-foreground hover:bg-secondary/90',
+        ghost: 'text-foreground hover:bg-white/10',
+        link: 'text-primary underline-offset-4 hover:underline shadow-none',
       },
       size: {
         default: 'h-10 px-4 py-2',

@@ -1,49 +1,50 @@
 @import "tailwindcss";
 
 @theme {
-  /* Color Palette - New York Style */
-  --color-background: 0 0% 100%;
-  --color-foreground: 222.2 84% 4.9%;
-  --color-card: 0 0% 100%;
-  --color-card-foreground: 222.2 84% 4.9%;
-  --color-popover: 0 0% 100%;
-  --color-popover-foreground: 222.2 84% 4.9%;
-  --color-primary: 222.2 47.4% 11.2%;
-  --color-primary-foreground: 210 40% 98%;
-  --color-secondary: 210 40% 96.1%;
-  --color-secondary-foreground: 222.2 47.4% 11.2%;
-  --color-muted: 210 40% 96.1%;
-  --color-muted-foreground: 215.4 16.3% 46.9%;
-  --color-accent: 210 40% 96.1%;
-  --color-accent-foreground: 222.2 47.4% 11.2%;
-  --color-destructive: 0 84.2% 60.2%;
-  --color-destructive-foreground: 210 40% 98%;
-  --color-border: 214.3 31.8% 91.4%;
-  --color-input: 214.3 31.8% 91.4%;
-  --color-ring: 222.2 84% 4.9%;
-  --radius: 0.5rem;
+  /* Dark purple/black palette used for both default and "dark" */
+  --color-background: 248 39% 6%;
+  --color-foreground: 210 20% 96%;
+  --color-card: 247 42% 10%;
+  --color-card-foreground: 210 20% 96%;
+  --color-popover: 247 42% 12%;
+  --color-popover-foreground: 210 20% 96%;
+  --color-primary: 270 70% 64%;
+  --color-primary-foreground: 0 0% 98%;
+  --color-secondary: 247 32% 16%;
+  --color-secondary-foreground: 210 20% 94%;
+  --color-muted: 248 30% 18%;
+  --color-muted-foreground: 216 14% 80%;
+  --color-accent: 276 68% 55%;
+  --color-accent-foreground: 0 0% 98%;
+  --color-destructive: 0 62.8% 30.6%;
+  --color-destructive-foreground: 0 0% 98%;
+  --color-border: 263 45% 28%;
+  --color-input: 263 45% 28%;
+  --color-ring: 277 68% 58%;
+  --radius: 0.75rem;
 }
 
 .dark {
-  --color-background: 222.2 84% 4.9%;
-  --color-foreground: 210 40% 98%;
-  --color-card: 222.2 84% 4.9%;
-  --color-card-foreground: 210 40% 98%;
-  --color-popover: 222.2 84% 4.9%;
-  --color-popover-foreground: 210 40% 98%;
-  --color-primary: 210 40% 98%;
-  --color-primary-foreground: 222.2 47.4% 11.2%;
-  --color-secondary: 217.2 32.6% 17.5%;
-  --color-secondary-foreground: 210 40% 98%;
-  --color-muted: 217.2 32.6% 17.5%;
-  --color-muted-foreground: 215 20.2% 65.1%;
-  --color-accent: 217.2 32.6% 17.5%;
-  --color-accent-foreground: 210 40% 98%;
+  --color-background: 248 39% 6%;
+  --color-foreground: 210 20% 96%;
+  --color-card: 247 42% 10%;
+  --color-card-foreground: 210 20% 96%;
+  --color-popover: 247 42% 12%;
+  --color-popover-foreground: 210 20% 96%;
+  --color-primary: 270 70% 64%;
+  --color-primary-foreground: 0 0% 98%;
+  --color-secondary: 247 32% 16%;
+  --color-secondary-foreground: 210 20% 94%;
+  --color-muted: 248 30% 18%;
+  --color-muted-foreground: 216 14% 80%;
+  --color-accent: 276 68% 55%;
+  --color-accent-foreground: 0 0% 98%;
   --color-destructive: 0 62.8% 30.6%;
-  --color-destructive-foreground: 210 40% 98%;
-  --color-border: 217.2 32.6% 17.5%;
-  --color-input: 217.2 32.6% 17.5%;
-  --color-ring: 212.7 26.8% 83.9%;
+  --color-destructive-foreground: 0 0% 98%;
+  --color-border: 263 45% 28%;
+  --color-input: 263 45% 28%;
+  --color-ring: 277 68% 58%;
+  --radius: 0.75rem;
 }
 
 * {
@@ -52,5 +53,25 @@
 
 body {
   background-color: hsl(var(--color-background));
+  background-image:
+    radial-gradient(circle at 10% 20%, rgba(116, 66, 255, 0.3), transparent 32%),
+    radial-gradient(circle at 80% 0%, rgba(81, 0, 149, 0.28), transparent 30%),
+    radial-gradient(circle at 70% 70%, rgba(0, 201, 255, 0.18), transparent 32%),
+    linear-gradient(135deg, #05030f 0%, #0c0621 45%, #05030f 100%);
   color: hsl(var(--color-foreground));
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(141, 92, 255, 0.16), transparent 35%),
+              radial-gradient(circle at 80% 40%, rgba(49, 0, 98, 0.2), transparent 40%),
+              radial-gradient(circle at 40% 80%, rgba(38, 143, 255, 0.14), transparent 40%);
+  filter: blur(50px);
+  pointer-events: none;
+  z-index: 0;
 }

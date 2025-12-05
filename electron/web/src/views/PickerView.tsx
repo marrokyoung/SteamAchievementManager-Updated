@@ -17,10 +17,10 @@ import {
 import type { Game } from '@/types/api'
 
 const GAME_TYPES = [
-  { value: 'normal', label: 'Games', color: 'blue' },
-  { value: 'demo', label: 'Demos', color: 'green' },
+  { value: 'normal', label: 'Games', color: 'purple' },
+  { value: 'demo', label: 'Demos', color: 'purple' },
   { value: 'mod', label: 'Mods', color: 'purple' },
-  { value: 'junk', label: 'Junk', color: 'gray' }
+  { value: 'junk', label: 'Junk', color: 'purple' }
 ] as const
 
 const normalizeGameType = (type: string) => {
@@ -290,6 +290,13 @@ function GameCard({
   const [fullImageUrl, setFullImageUrl] = useState<string | null>(null)
   const normalizedType = normalizeGameType(game.type)
   const typeConfig = GAME_TYPES.find(t => t.value === normalizedType)
+  const hasArt = !!fullImageUrl && !imageError
+  const badgeTone =
+    normalizedType === 'demo'
+      ? 'bg-purple-500/80'
+      : normalizedType === 'junk'
+        ? 'bg-purple-700/80'
+        : 'bg-purple-600/80'
 
   // Reset error state and resolve full URL when game changes
   useEffect(() => {
@@ -328,7 +335,7 @@ function GameCard({
     >
       {/* Image or placeholder */}
       <div className="relative w-full h-full">
-        {fullImageUrl && !imageError ? (
+        {hasArt ? (
           <img
             src={fullImageUrl}
             alt={game.name}
@@ -347,8 +354,12 @@ function GameCard({
       </div>
 
       {/* Content overlay */}
-      <div className="absolute bottom-0 left-0 right-0 p-3">
-        <p className="text-sm font-semibold text-white line-clamp-2 mb-1">{game.name}</p>
+      <div className="absolute bottom-0 left-0 right-0 p-3 space-y-1">
+        {!hasArt && (
+          <p className="text-sm font-semibold text-white line-clamp-2">
+            {game.name}
+          </p>
+        )}
 
         <div className="flex items-center gap-2">
           {!game.owned && (
@@ -360,11 +371,9 @@ function GameCard({
           {typeConfig && (
             <span
               className={cn(
-                'text-xs px-2 py-0.5 rounded-full font-semibold border border-white/10 bg-white/10 text-white shadow-sm',
-                normalizedType === 'demo' && 'bg-emerald-400/30 text-emerald-100 border-emerald-200/40',
-                normalizedType === 'mod' && 'bg-purple-500/30 text-purple-100 border-purple-200/40',
-                normalizedType === 'junk' && 'bg-slate-500/30 text-slate-100 border-slate-200/30',
-                normalizedType === 'normal' && 'bg-blue-500/30 text-blue-100 border-blue-200/40'
+                'text-xs px-2 py-0.5 rounded-full font-semibold border shadow-sm backdrop-blur-sm',
+                'text-white border-purple-200/40',
+                badgeTone
               )}
             >
               {typeConfig.label}

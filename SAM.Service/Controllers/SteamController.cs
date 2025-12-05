@@ -238,7 +238,7 @@ namespace SAM.Service.Controllers
             {
                 return BadRequest(ex.Message);
             }
-            catch (System.IO.FileNotFoundException ex)
+            catch (System.IO.FileNotFoundException)
             {
                 return Content(HttpStatusCode.NotFound, new ErrorResponse
                 {
@@ -647,6 +647,86 @@ namespace SAM.Service.Controllers
             }
             catch (Exception ex)
             {
+                return InternalServerError(ex);
+            }
+        }
+
+        /// <summary>
+        /// GET /api/games/{appId}/image - Serve game image (local Steam cache or CDN redirect)
+        /// </summary>
+        [HttpGet]
+        [Route("games/{appId}/image")]
+        public IHttpActionResult GetGameImage(uint appId)
+        {
+            try
+            {
+                // Validate appId
+                if (appId == 0)
+                {
+                    return BadRequest("Invalid appId");
+                }
+
+                // Resolve local image path
+                var localPath = SteamImageResolver.ResolveLocalImagePath(appId);
+
+                if (localPath != null && System.IO.File.Exists(localPath))
+                {
+                    // Serve local file as stream
+                    var fileInfo = new System.IO.FileInfo(localPath);
+                    var extension = System.IO.Path.GetExtension(localPath).ToLowerInvariant();
+                    var contentType = extension switch
+                    {
+                        ".jpg" or ".jpeg" => "image/jpeg",
+                        ".png" => "image/png",
+                        ".webp" => "image/webp",
+                        _ => "application/octet-stream"
+                    };
+
+                    // StreamContent owns the FileStream and will dispose it
+                    var fileStream = new System.IO.FileStream(localPath, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.Read);
+                    var streamContent = new System.Net.Http.StreamContent(fileStream);
+
+                    streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+                    streamContent.Headers.ContentLength = fileInfo.Length;
+
+                    var response = new System.Net.Http.HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = streamContent
+                    };
+
+                    // Cache headers (1 hour max-age)
+                    response.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
+                    {
+                        Public = true,
+                        MaxAge = TimeSpan.FromHours(1)
+                    };
+
+                    // Optional: Add Last-Modified/ETag for conditional requests
+                    response.Content.Headers.LastModified = fileInfo.LastWriteTimeUtc;
+                    response.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue(
+                        $"\"{fileInfo.LastWriteTimeUtc.Ticks:X}-{fileInfo.Length:X}\""
+                    );
+
+                    // StreamContent will dispose fileStream when response is disposed
+                    return ResponseMessage(response);
+                }
+
+                // No local file → redirect to CDN with absolute URL
+                var cdnUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg";
+                return Redirect(cdnUrl); // Returns 302 redirect, no response body
+            }
+            catch (System.IO.IOException ex)
+            {
+                API.SecurityLogger.Log(API.LogLevel.Warning, API.LogContext.HTTP,
+                    $"Failed to serve image for AppId {appId}: {ex.Message}");
+
+                // Fallback to CDN on read error
+                return Redirect($"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg");
+            }
+            catch (Exception ex)
+            {
+                API.SecurityLogger.Log(API.LogLevel.Error, API.LogContext.HTTP,
+                    $"Unexpected error serving image for AppId {appId}: {ex.Message}");
                 return InternalServerError(ex);
             }
         }

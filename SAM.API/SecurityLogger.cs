@@ -41,7 +41,9 @@ namespace SAM.API
         HTTP,
         Parse,
         Callback,
-        Validation
+        Validation,
+        Security,
+        Cache
     }
 
     public static class SecurityLogger

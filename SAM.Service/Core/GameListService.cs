@@ -101,34 +101,16 @@ namespace SAM.Service.Core
 
         private static string GetGameImageUrl(Client client, uint appId)
         {
-            var currentLanguage = client.SteamApps008.GetCurrentGameLanguage();
-
-            // Try small_capsule for current language
-            var candidate = client.SteamApps001.GetAppData(appId,
-                $"small_capsule/{currentLanguage}");
-            if (!string.IsNullOrEmpty(candidate))
+            // Try local Steam cache first
+            var localPath = SteamImageResolver.ResolveLocalImagePath(appId);
+            if (localPath != null)
             {
-                return $"https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/{appId}/{candidate}";
+                // Return API endpoint instead of file:/// URL
+                return $"/api/games/{appId}/image";
             }
 
-            // Fallback to English if not current language
-            if (currentLanguage != "english")
-            {
-                candidate = client.SteamApps001.GetAppData(appId, "small_capsule/english");
-                if (!string.IsNullOrEmpty(candidate))
-                {
-                    return $"https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/{appId}/{candidate}";
-                }
-            }
-
-            // Fallback to logo
-            candidate = client.SteamApps001.GetAppData(appId, "logo");
-            if (!string.IsNullOrEmpty(candidate))
-            {
-                return $"https://cdn.steamstatic.com/steamcommunity/public/images/apps/{appId}/{candidate}.jpg";
-            }
-
-            return null;
+            // Fallback to CDN (higher-res header image, 460×215)
+            return $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg";
         }
     }
 }

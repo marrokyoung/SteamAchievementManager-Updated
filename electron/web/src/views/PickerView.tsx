@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Gamepad2, RefreshCw, Loader2, Filter } from 'lucide-react'
 import { useGames } from '@/hooks/useGameQueries'
-import { updateAPIConfig } from '@/lib/api'
+import { updateAPIConfig, initializeAPI } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/use-toast'
@@ -30,6 +30,28 @@ const normalizeGameType = (type: string) => {
   if (type === 'junk') return 'junk'
   // Default unknown types to 'normal' for safety
   return 'normal'
+}
+
+// Helper to resolve full image URLs (relative API URLs need baseUrl prepended)
+const getFullImageUrl = async (imageUrl: string | null): Promise<string | null> => {
+  if (!imageUrl) return null
+
+  // If it's already a full URL (CDN), return as-is
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    return imageUrl
+  }
+
+  // If it's a relative API URL, prepend baseUrl
+  if (imageUrl.startsWith('/api/')) {
+    try {
+      const config = await initializeAPI()
+      return `${config.baseUrl}${imageUrl}`
+    } catch {
+      return null
+    }
+  }
+
+  return imageUrl
 }
 
 export default function PickerView() {
@@ -264,15 +286,37 @@ function GameCard({
   onClick: (appId: number) => void
   isInitializing: boolean
 }) {
+  const [imageError, setImageError] = useState(false)
+  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null)
   const normalizedType = normalizeGameType(game.type)
   const typeConfig = GAME_TYPES.find(t => t.value === normalizedType)
+
+  // Reset error state and resolve full URL when game changes
+  useEffect(() => {
+    setImageError(false)
+    setFullImageUrl(null) // Clear previous URL immediately
+
+    let isActive = true // Flag to prevent stale updates
+
+    // Resolve full image URL (prepend baseUrl for relative API URLs)
+    getFullImageUrl(game.imageUrl).then(url => {
+      if (isActive) {
+        setFullImageUrl(url)
+      }
+    })
+
+    // Cleanup: mark as inactive to prevent setting stale URLs
+    return () => {
+      isActive = false
+    }
+  }, [game.id, game.imageUrl])
 
   return (
     <button
       onClick={() => onClick(game.id)}
       disabled={isInitializing}
       className={cn(
-        'group relative h-44 overflow-hidden rounded-xl border transition-all duration-200',
+        'group relative aspect-[460/215] overflow-hidden rounded-xl border transition-all duration-200',
         'bg-white/5 border-white/10 shadow-[0_15px_45px_rgba(0,0,0,0.45)] hover:-translate-y-1',
         'hover:shadow-[0_20px_55px_rgba(124,58,237,0.35)]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(140,97,255,0.65)] focus-visible:ring-offset-0',
@@ -284,15 +328,13 @@ function GameCard({
     >
       {/* Image or placeholder */}
       <div className="relative w-full h-full">
-        {game.imageUrl ? (
+        {fullImageUrl && !imageError ? (
           <img
-            src={game.imageUrl}
+            src={fullImageUrl}
             alt={game.name}
+            loading="lazy"
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-            onError={(e) => {
-              // Fallback to placeholder on image load error
-              e.currentTarget.style.display = 'none'
-            }}
+            onError={() => setImageError(true)}
           />
         ) : (
           <div className="flex items-center justify-center h-full bg-gradient-to-br from-[#221239] via-[#140d26] to-[#0c0818]">
@@ -301,7 +343,7 @@ function GameCard({
         )}
 
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent" />
       </div>
 
       {/* Content overlay */}

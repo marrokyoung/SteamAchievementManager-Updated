@@ -287,10 +287,11 @@ function GameCard({
   isInitializing: boolean
 }) {
   const [imageError, setImageError] = useState(false)
-  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null)
+  const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null)
+  const [fallbackStep, setFallbackStep] = useState(0)
   const normalizedType = normalizeGameType(game.type)
   const typeConfig = GAME_TYPES.find(t => t.value === normalizedType)
-  const hasArt = !!fullImageUrl && !imageError
+  const hasArt = !!currentImageUrl && !imageError
   const badgeTone =
     normalizedType === 'demo'
       ? 'bg-purple-500/80'
@@ -298,17 +299,28 @@ function GameCard({
         ? 'bg-purple-700/80'
         : 'bg-purple-600/80'
 
+  // Ordered CDN fallbacks for games that lack header art (e.g., library_hero only)
+  const cdnFallbacks = [
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/header.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/library_hero.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/library_600x900.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/hero.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/capsule_616x353.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/capsule_231x87.jpg`
+  ]
+
   // Reset error state and resolve full URL when game changes
   useEffect(() => {
     setImageError(false)
-    setFullImageUrl(null) // Clear previous URL immediately
+    setFallbackStep(0)
+    setCurrentImageUrl(null) // Clear previous URL immediately
 
     let isActive = true // Flag to prevent stale updates
 
     // Resolve full image URL (prepend baseUrl for relative API URLs)
     getFullImageUrl(game.imageUrl).then(url => {
       if (isActive) {
-        setFullImageUrl(url)
+        setCurrentImageUrl(url)
       }
     })
 
@@ -317,6 +329,17 @@ function GameCard({
       isActive = false
     }
   }, [game.id, game.imageUrl])
+
+  // Advance through CDN fallbacks on error (header -> library_hero -> etc.)
+  const handleImageError = () => {
+    const nextUrl = cdnFallbacks[fallbackStep]
+    if (nextUrl && nextUrl !== currentImageUrl) {
+      setFallbackStep(prev => prev + 1)
+      setCurrentImageUrl(nextUrl)
+      return
+    }
+    setImageError(true)
+  }
 
   return (
     <button
@@ -337,11 +360,15 @@ function GameCard({
       <div className="relative w-full h-full">
         {hasArt ? (
           <img
-            src={fullImageUrl}
+            src={currentImageUrl || undefined}
             alt={game.name}
             loading="lazy"
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-            onError={() => setImageError(true)}
+            className={`w-full h-full transition-transform duration-500 ${
+              game.imageType === 'logo'
+                ? 'object-contain p-8'
+                : 'object-cover group-hover:scale-110'
+            }`}
+            onError={handleImageError}
           />
         ) : (
           <div className="flex items-center justify-center h-full bg-gradient-to-br from-[#221239] via-[#140d26] to-[#0c0818]">

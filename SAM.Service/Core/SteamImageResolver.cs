@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using SAM.API;
 
 namespace SAM.Service.Core
 {
@@ -11,8 +12,26 @@ namespace SAM.Service.Core
     /// </summary>
     public static class SteamImageResolver
     {
+        /// <summary>
+        /// Image source type for UI rendering
+        /// </summary>
+        public enum ImageSourceType
+        {
+            Standard,  // Header, hero, grid, library_hero, portrait (standard aspect ratio)
+            Logo       // Logo fallback images (may need object-contain)
+        }
+
+        /// <summary>
+        /// Internal result containing path and source type
+        /// </summary>
+        private class ImageResolutionResult
+        {
+            public string Path { get; set; }
+            public ImageSourceType SourceType { get; set; }
+        }
+
         // Thread-safe cache of resolved image paths
-        private static readonly ConcurrentDictionary<uint, string> _imagePathCache = new ConcurrentDictionary<uint, string>();
+        private static readonly ConcurrentDictionary<uint, ImageResolutionResult> _imagePathCache = new ConcurrentDictionary<uint, ImageResolutionResult>();
         private static readonly object _userLock = new object();
         private static string _cachedUserId;
         private static bool _userResolved;
@@ -24,23 +43,24 @@ namespace SAM.Service.Core
         /// Resolves the local image path for a given app ID
         /// </summary>
         /// <param name="appId">Steam App ID</param>
-        /// <returns>Absolute file path if found, null otherwise</returns>
-        public static string ResolveLocalImagePath(uint appId)
+        /// <returns>Tuple of (absolute file path if found or null, source type)</returns>
+        public static (string path, ImageSourceType sourceType) ResolveLocalImagePath(uint appId)
         {
             // Check cache first
-            if (_imagePathCache.TryGetValue(appId, out var cachedPath))
+            if (_imagePathCache.TryGetValue(appId, out var cachedResult))
             {
-                return cachedPath;
+                return (cachedResult.Path, cachedResult.SourceType);
             }
 
             // Resolve and cache
-            var resolvedPath = ResolveLocalImagePathInternal(appId);
-            if (resolvedPath != null)
+            var resolvedResult = ResolveLocalImagePathInternal(appId);
+            if (resolvedResult != null)
             {
-                _imagePathCache.TryAdd(appId, resolvedPath);
+                _imagePathCache.TryAdd(appId, resolvedResult);
+                return (resolvedResult.Path, resolvedResult.SourceType);
             }
 
-            return resolvedPath;
+            return (null, ImageSourceType.Standard);
         }
 
         /// <summary>
@@ -59,7 +79,7 @@ namespace SAM.Service.Core
             _imagePathCache.Clear();
         }
 
-        private static string ResolveLocalImagePathInternal(uint appId)
+        private static ImageResolutionResult ResolveLocalImagePathInternal(uint appId)
         {
             try
             {
@@ -83,7 +103,10 @@ namespace SAM.Service.Core
                 {
                     var gridPath = Path.Combine(steamPath, "userdata", userId, "config", "grid");
                     var customGridPath = FindImageFile(gridPath, appId.ToString(), steamPath);
-                    if (customGridPath != null) return customGridPath;
+                    if (customGridPath != null)
+                    {
+                        return new ImageResolutionResult { Path = customGridPath, SourceType = ImageSourceType.Standard };
+                    }
                 }
 
                 // Priority 2-5: Library cache (appcache/librarycache)
@@ -91,19 +114,46 @@ namespace SAM.Service.Core
 
                 // Priority 2: Library header (460×215 landscape)
                 var headerPath = FindImageFile(libraryCachePath, $"{appId}_header", steamPath, new[] { ".jpg" });
-                if (headerPath != null) return headerPath;
+                if (headerPath != null)
+                {
+                    return new ImageResolutionResult { Path = headerPath, SourceType = ImageSourceType.Standard };
+                }
 
                 // Priority 3: Hero banner
                 var heroPath = FindImageFile(libraryCachePath, $"{appId}_hero", steamPath, new[] { ".jpg" });
-                if (heroPath != null) return heroPath;
+                if (heroPath != null)
+                {
+                    return new ImageResolutionResult { Path = heroPath, SourceType = ImageSourceType.Standard };
+                }
 
                 // Priority 4: Library hero (multiple extensions)
                 var libraryHeroPath = FindImageFile(libraryCachePath, $"{appId}_library_hero", steamPath);
-                if (libraryHeroPath != null) return libraryHeroPath;
+                if (libraryHeroPath != null)
+                {
+                    return new ImageResolutionResult { Path = libraryHeroPath, SourceType = ImageSourceType.Standard };
+                }
 
                 // Priority 5: Portrait library (600x900)
                 var library600Path = FindImageFile(libraryCachePath, $"{appId}_library_600x900", steamPath, new[] { ".jpg" });
-                if (library600Path != null) return library600Path;
+                if (library600Path != null)
+                {
+                    return new ImageResolutionResult { Path = library600Path, SourceType = ImageSourceType.Standard };
+                }
+
+                // Priority 6: Logo in app-specific subdirectory
+                var logoPath = Path.Combine(libraryCachePath, appId.ToString());
+                var logoFile = FindImageFile(logoPath, "logo", steamPath, new[] { ".png" });
+                if (logoFile != null)
+                {
+                    return new ImageResolutionResult { Path = logoFile, SourceType = ImageSourceType.Logo };
+                }
+
+                // Priority 7: Generic logo in library cache
+                var genericLogoPath = FindImageFile(libraryCachePath, $"{appId}_logo", steamPath, new[] { ".png", ".jpg", ".jpeg" });
+                if (genericLogoPath != null)
+                {
+                    return new ImageResolutionResult { Path = genericLogoPath, SourceType = ImageSourceType.Logo };
+                }
 
                 return null; // No local image found
             }

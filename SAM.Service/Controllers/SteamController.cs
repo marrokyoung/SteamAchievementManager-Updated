@@ -666,10 +666,12 @@ namespace SAM.Service.Controllers
                     return BadRequest("Invalid appId");
                 }
 
-                // Resolve local image path
-                var localPath = SteamImageResolver.ResolveLocalImagePath(appId);
+                // Resolve local image path and type (skip logos for cover art)
+                var (localPath, sourceType) = SteamImageResolver.ResolveLocalImagePath(appId);
 
-                if (localPath != null && System.IO.File.Exists(localPath))
+                if (localPath != null &&
+                    sourceType == SteamImageResolver.ImageSourceType.Standard &&
+                    System.IO.File.Exists(localPath))
                 {
                     // Serve local file as stream
                     var fileInfo = new System.IO.FileInfo(localPath);
@@ -710,10 +712,8 @@ namespace SAM.Service.Controllers
                     // StreamContent will dispose fileStream when response is disposed
                     return ResponseMessage(response);
                 }
-
-                // No local file → redirect to CDN with absolute URL
-                var cdnUrl = $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg";
-                return Redirect(cdnUrl); // Returns 302 redirect, no response body
+                // No local file -> redirect to CDN header (client can fallback further if needed)
+                return Redirect($"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg");
             }
             catch (System.IO.IOException ex)
             {

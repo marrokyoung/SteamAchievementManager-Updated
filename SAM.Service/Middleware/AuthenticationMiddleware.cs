@@ -26,8 +26,21 @@ namespace SAM.Service.Middleware
 
         public override async Task Invoke(IOwinContext context)
         {
+            var path = context.Request.Path.Value;
+            var method = context.Request.Method;
+
             // Skip auth for health check
-            if (context.Request.Path.Value == "/health")
+            if (path == "/health")
+            {
+                await Next.Invoke(context);
+                return;
+            }
+
+            // Skip auth for game image proxy (public art; <img> cannot send headers)
+            if (method == "GET" &&
+                path != null &&
+                path.StartsWith("/api/games/", StringComparison.OrdinalIgnoreCase) &&
+                path.EndsWith("/image", StringComparison.OrdinalIgnoreCase))
             {
                 await Next.Invoke(context);
                 return;

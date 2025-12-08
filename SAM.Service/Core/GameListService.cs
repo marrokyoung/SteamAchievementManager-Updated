@@ -75,7 +75,7 @@ namespace SAM.Service.Core
                 }
 
                 var name = client.SteamApps001.GetAppData(kv.Key, "name");
-                var imageUrl = GetGameImageUrl(client, kv.Key);
+                var (imageUrl, imageType) = GetGameImageUrl(client, kv.Key);
 
                 games.Add(new GameDto
                 {
@@ -83,6 +83,7 @@ namespace SAM.Service.Core
                     Name = name ?? $"App {kv.Key}",
                     Type = kv.Value,
                     ImageUrl = imageUrl,
+                    ImageType = imageType,
                     Owned = owns
                 });
 
@@ -99,18 +100,25 @@ namespace SAM.Service.Core
             return games.OrderBy(g => g.Name).ToList();
         }
 
-        private static string GetGameImageUrl(Client client, uint appId)
+        private static (string url, string imageType) GetGameImageUrl(Client client, uint appId)
         {
-            // Try local Steam cache first
-            var localPath = SteamImageResolver.ResolveLocalImagePath(appId);
-            if (localPath != null)
+            // Try local Steam cache first - now returns (path, sourceType) tuple
+            var (localPath, sourceType) = SteamImageResolver.ResolveLocalImagePath(appId);
+
+            // Only use local art when it's a standard cover/hero image.
+            // If we only found a logo, prefer the CDN header so users see full cover art.
+            if (localPath != null && sourceType == SteamImageResolver.ImageSourceType.Standard)
             {
-                // Return API endpoint instead of file:/// URL
-                return $"/api/games/{appId}/image";
+                // Map ImageSourceType to DTO imageType
+                string imageType = sourceType == SteamImageResolver.ImageSourceType.Logo ? "logo" : null;
+
+                return ($"/api/games/{appId}/image", imageType);
             }
 
-            // Fallback to CDN (higher-res header image, 460×215)
-            return $"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg";
+            // If we only found a logo, tell the UI to treat it as a logo (object-contain)
+            var imageTypeHint = null as string;
+
+            return ($"/api/games/{appId}/image", imageTypeHint);
         }
     }
 }

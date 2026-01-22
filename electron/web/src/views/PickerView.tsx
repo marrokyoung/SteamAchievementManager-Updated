@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Gamepad2, RefreshCw, Loader2, Filter } from 'lucide-react'
 import { useGames } from '@/hooks/useGameQueries'
@@ -287,8 +287,10 @@ function GameCard({
   isInitializing: boolean
 }) {
   const [imageError, setImageError] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
   const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null)
   const [fallbackStep, setFallbackStep] = useState(0)
+  const [isLogoFallback, setIsLogoFallback] = useState(false)
   const normalizedType = normalizeGameType(game.type)
   const typeConfig = GAME_TYPES.find(t => t.value === normalizedType)
   const hasArt = !!currentImageUrl && !imageError
@@ -299,46 +301,90 @@ function GameCard({
         ? 'bg-purple-700/80'
         : 'bg-purple-600/80'
 
-  // Ordered CDN fallbacks for games that lack header art (e.g., library_hero only)
+  // Track if component is mounted (for async safety in ALL async operations)
+  const isMountedRef = useRef(true)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => { isMountedRef.current = false }
+  }, [])
+
+  // Client GET-based fallback chain for when initial image fails (splash art only)
+  // Server redirects to header.jpg; if that fails, client tries these in order
   const cdnFallbacks = [
     `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/header.jpg`,
     `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/library_hero.jpg`,
     `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/library_600x900.jpg`,
     `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/hero.jpg`,
     `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/capsule_616x353.jpg`,
-    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/capsule_231x87.jpg`
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/capsule_231x87.jpg`,
+    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${game.id}/capsule_sm_120.jpg`,
+    `/api/games/${game.id}/logo`
   ]
+  const LOGO_FALLBACK_START_INDEX = cdnFallbacks.length - 1 // last entry is logo
 
-  // Reset error state and resolve full URL when game changes
+  // Reset on game change - guard with per-effect cancellation token
   useEffect(() => {
-    setImageError(false)
-    setFallbackStep(0)
-    setCurrentImageUrl(null) // Clear previous URL immediately
+    let isActive = true
 
-    let isActive = true // Flag to prevent stale updates
+    setImageError(false)
+    setImageLoaded(false)
+    setFallbackStep(0)
+    setIsLogoFallback(false)
+    setCurrentImageUrl(null)
 
     // Resolve full image URL (prepend baseUrl for relative API URLs)
     getFullImageUrl(game.imageUrl).then(url => {
-      if (isActive) {
+      // Guard against setting state after unmount or game change
+      if (!isActive) return
+
+      if (url) {
         setCurrentImageUrl(url)
+      } else {
+        // Initial URL failed - start fallback chain at index 0
+        setCurrentImageUrl(cdnFallbacks[0])
       }
     })
 
-    // Cleanup: mark as inactive to prevent setting stale URLs
-    return () => {
-      isActive = false
-    }
+    return () => { isActive = false }
   }, [game.id, game.imageUrl])
 
-  // Advance through CDN fallbacks on error (header -> library_hero -> etc.)
-  const handleImageError = () => {
-    const nextUrl = cdnFallbacks[fallbackStep]
-    if (nextUrl && nextUrl !== currentImageUrl) {
-      setFallbackStep(prev => prev + 1)
-      setCurrentImageUrl(nextUrl)
+  // Advance through fallbacks on error using local loop to avoid async state issues
+  const handleImageError = async () => {
+    let localIndex = fallbackStep
+
+    while (localIndex < cdnFallbacks.length) {
+      const nextUrl = cdnFallbacks[localIndex]
+      localIndex++
+
+      // Skip if same as current URL
+      if (nextUrl === currentImageUrl) continue
+
+      const isLogo = (localIndex - 1) >= LOGO_FALLBACK_START_INDEX
+
+      // Resolve API URLs (relative paths)
+      let resolvedUrl: string | null = nextUrl
+      if (nextUrl.startsWith('/api/')) {
+        resolvedUrl = await getFullImageUrl(nextUrl)
+      }
+
+      // Check mount status after async operation
+      if (!isMountedRef.current) return
+
+      // If resolution failed, try next in loop
+      if (!resolvedUrl) continue
+
+      // Found a valid URL - update state and exit
+      setFallbackStep(localIndex)
+      setIsLogoFallback(isLogo)
+      setCurrentImageUrl(resolvedUrl)
       return
     }
-    setImageError(true)
+
+    // Exhausted all fallbacks
+    if (isMountedRef.current) {
+      setFallbackStep(localIndex)
+      setImageError(true)
+    }
   }
 
   return (
@@ -356,37 +402,47 @@ function GameCard({
           : 'border-yellow-400/40 hover:border-yellow-400/70'
       )}
     >
-      {/* Image or placeholder */}
+      {/* Image with placeholder behind - placeholder visible until image loads */}
       <div className="relative w-full h-full">
-        {hasArt ? (
+        {/* Placeholder always rendered behind */}
+        <div className={cn(
+          "absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#221239] via-[#140d26] to-[#0c0818] transition-opacity duration-300",
+          imageLoaded && hasArt ? "opacity-0" : "opacity-100"
+        )}>
+          <Gamepad2 className="h-16 w-16 text-muted-foreground/40" />
+        </div>
+
+        {/* Image fades in when loaded */}
+        {hasArt && (
           <img
             src={currentImageUrl || undefined}
             alt={game.name}
             loading="lazy"
-            className={`w-full h-full transition-transform duration-500 ${
-              game.imageType === 'logo'
+            className={cn(
+              "w-full h-full transition-all duration-300",
+              (game.imageType === 'logo' || isLogoFallback)
                 ? 'object-contain p-8'
-                : 'object-cover group-hover:scale-110'
-            }`}
+                : 'object-cover group-hover:scale-110',
+              imageLoaded ? "opacity-100" : "opacity-0"
+            )}
+            onLoad={() => setImageLoaded(true)}
             onError={handleImageError}
           />
-        ) : (
-          <div className="flex items-center justify-center h-full bg-gradient-to-br from-[#221239] via-[#140d26] to-[#0c0818]">
-            <Gamepad2 className="h-16 w-16 text-muted-foreground/40" />
-          </div>
         )}
 
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent pointer-events-none" />
       </div>
 
       {/* Content overlay */}
       <div className="absolute bottom-0 left-0 right-0 p-3 space-y-1">
-        {!hasArt && (
-          <p className="text-sm font-semibold text-white line-clamp-2">
-            {game.name}
-          </p>
-        )}
+        {/* Title: always visible until image loads, then hover-only */}
+        <p className={cn(
+          "text-sm font-semibold text-white line-clamp-2 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] transition-opacity duration-200",
+          imageLoaded && hasArt ? "opacity-0 group-hover:opacity-100" : "opacity-100"
+        )}>
+          {game.name}
+        </p>
 
         <div className="flex items-center gap-2">
           {!game.owned && (

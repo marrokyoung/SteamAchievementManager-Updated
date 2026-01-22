@@ -75,7 +75,7 @@ namespace SAM.Service.Core
                 }
 
                 var name = client.SteamApps001.GetAppData(kv.Key, "name");
-                var (imageUrl, imageType) = GetGameImageUrl(client, kv.Key);
+                var (imageUrl, imageType) = GetGameImageUrl(kv.Key);
 
                 games.Add(new GameDto
                 {
@@ -100,25 +100,10 @@ namespace SAM.Service.Core
             return games.OrderBy(g => g.Name).ToList();
         }
 
-        private static (string url, string imageType) GetGameImageUrl(Client client, uint appId)
+        private static (string url, string imageType) GetGameImageUrl(uint appId)
         {
-            // Try local Steam cache first - now returns (path, sourceType) tuple
-            var (localPath, sourceType) = SteamImageResolver.ResolveLocalImagePath(appId);
-
-            // Only use local art when it's a standard cover/hero image.
-            // If we only found a logo, prefer the CDN header so users see full cover art.
-            if (localPath != null && sourceType == SteamImageResolver.ImageSourceType.Standard)
-            {
-                // Map ImageSourceType to DTO imageType
-                string imageType = sourceType == SteamImageResolver.ImageSourceType.Logo ? "logo" : null;
-
-                return ($"/api/games/{appId}/image", imageType);
-            }
-
-            // If we only found a logo, tell the UI to treat it as a logo (object-contain)
-            var imageTypeHint = null as string;
-
-            return ($"/api/games/{appId}/image", imageTypeHint);
+            // Return the image endpoint - server handles the fallback logic.
+            return ($"/api/games/{appId}/image", null);
         }
     }
 }

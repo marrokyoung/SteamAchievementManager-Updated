@@ -36,14 +36,17 @@ namespace SAM.Service.Middleware
                 return;
             }
 
-            // Skip auth for game image proxy (public art; <img> cannot send headers)
+            // Skip auth for game image endpoints (public art; <img> cannot send headers)
+            // Includes both /image and /logo endpoints
             if (method == "GET" &&
-                path != null &&
-                path.StartsWith("/api/games/", StringComparison.OrdinalIgnoreCase) &&
-                path.EndsWith("/image", StringComparison.OrdinalIgnoreCase))
+                path?.StartsWith("/api/games/", StringComparison.OrdinalIgnoreCase) == true)
             {
-                await Next.Invoke(context);
-                return;
+                if (path.EndsWith("/image", StringComparison.OrdinalIgnoreCase) ||
+                    path.EndsWith("/logo", StringComparison.OrdinalIgnoreCase))
+                {
+                    await Next.Invoke(context);
+                    return;
+                }
             }
 
             var token = context.Request.Headers.Get(API_TOKEN_HEADER);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import type React from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
@@ -21,6 +21,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { toast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import {
@@ -29,7 +41,10 @@ import {
   Loader2,
   AlertCircle,
   Lock,
-  Unlock
+  Unlock,
+  Trophy,
+  BarChart3,
+  ArrowUpDown
 } from 'lucide-react'
 import type { GameData, Achievement, Stat } from '@/types/api'
 
@@ -50,6 +65,8 @@ export default function ManagerView() {
   const [includeAchievements, setIncludeAchievements] = useState(false)
   const [isReturningToPicker, setIsReturningToPicker] = useState(false)
   const [serviceReady, setServiceReady] = useState(false)
+  const [sortOrder, setSortOrder] = useState<'default' | 'unlocked' | 'locked'>('default')
+  const [sortKey, setSortKey] = useState(0)
 
   // Queries and mutations - only enable after service is ready
   const { data: gameData, isLoading, error, refetch, isRefetching } = useGameData(numericAppId, serviceReady)
@@ -65,6 +82,37 @@ export default function ManagerView() {
     updateAchievementsMutation.isPending ||
     updateStatsMutation.isPending ||
     storeChangesMutation.isPending
+
+  // Capture achievement states at sort-time (only updates when sortKey changes)
+  const sortSnapshot = useMemo(() => {
+    const snapshot = new Map<string, boolean>()
+    gameData?.achievements.forEach(a => {
+      snapshot.set(a.id, modifiedAchievements.get(a.id) ?? a.isAchieved)
+    })
+    return snapshot
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortKey, gameData?.achievements])
+
+  // Sorted achievements with stable tie-breaking
+  const sortedAchievements = useMemo(() => {
+    if (!gameData?.achievements) return []
+
+    const indexed = gameData.achievements.map((a, i) => ({ a, i }))
+
+    if (sortOrder === 'default') return indexed.map(x => x.a)
+
+    return indexed.sort((x, y) => {
+      const aUnlocked = sortSnapshot.get(x.a.id) ?? x.a.isAchieved
+      const bUnlocked = sortSnapshot.get(y.a.id) ?? y.a.isAchieved
+
+      if (aUnlocked !== bUnlocked) {
+        return sortOrder === 'unlocked'
+          ? (bUnlocked ? 1 : 0) - (aUnlocked ? 1 : 0)
+          : (aUnlocked ? 1 : 0) - (bUnlocked ? 1 : 0)
+      }
+      return x.i - y.i
+    }).map(x => x.a)
+  }, [gameData?.achievements, sortOrder, sortSnapshot])
 
   // Sync originalData on every refetch
   useEffect(() => {
@@ -466,13 +514,29 @@ export default function ManagerView() {
             </DialogContent>
           </Dialog>
 
-          <Button variant="ghost" size="icon" onClick={() => refetch()} disabled={isRefetching}>
-            <RefreshCw className={cn('h-4 w-4', isRefetching && 'animate-spin')} />
-          </Button>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => refetch()} disabled={isRefetching} aria-label="Refresh data">
+                  <RefreshCw className={cn('h-4 w-4', isRefetching && 'animate-spin')} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Refresh data</p>
+              </TooltipContent>
+            </Tooltip>
 
-          <Button variant="ghost" size="icon" onClick={handleBackToPicker} disabled={isReturningToPicker}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={handleBackToPicker} disabled={isReturningToPicker} aria-label="Back to game picker">
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Back to game picker</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
@@ -480,81 +544,205 @@ export default function ManagerView() {
       <div className="grid md:grid-cols-2 gap-6">
         {/* Achievements Section */}
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
+            <h3 className="text-lg font-semibold whitespace-nowrap">
               Achievements ({gameData?.achievements.length || 0})
               {modifiedAchievements.size > 0 && (
-                <span className="text-sm text-yellow-600 dark:text-yellow-400 ml-2">
+                <span className="text-sm text-primary ml-2">
                   ({modifiedAchievements.size} modified)
                 </span>
               )}
             </h3>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleUnlockAll}>
-                <Unlock className="h-3 w-3 mr-1" />
-                Unlock All
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleLockAll}>
-                <Lock className="h-3 w-3 mr-1" />
-                Lock All
-              </Button>
+            {(gameData?.achievements.length ?? 0) > 0 && (
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={handleUnlockAll}>
+                  <Unlock className="h-3 w-3 mr-1" />
+                  Unlock All
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleLockAll}>
+                  <Lock className="h-3 w-3 mr-1" />
+                  Lock All
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <ArrowUpDown className="h-3 w-3 mr-1" />
+                      Sort
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => { setSortOrder('default'); setSortKey(k => k + 1) }}
+                      className={sortOrder === 'default' ? 'bg-accent' : ''}
+                    >
+                      Default Order
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => { setSortOrder('unlocked'); setSortKey(k => k + 1) }}
+                      className={sortOrder === 'unlocked' ? 'bg-accent' : ''}
+                    >
+                      Unlocked First
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => { setSortOrder('locked'); setSortKey(k => k + 1) }}
+                      className={sortOrder === 'locked' ? 'bg-accent' : ''}
+                    >
+                      Locked First
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
+          </div>
+
+          {(gameData?.achievements.length ?? 0) === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+              <Trophy className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
+              <p className="text-sm font-medium text-white mb-1">No achievements</p>
+              <p className="text-xs text-muted-foreground/70">
+                This game doesn't have any achievements to manage.
+              </p>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-2">
+              {sortedAchievements.map(achievement => {
+                const isModified = modifiedAchievements.has(achievement.id)
+                const currentValue = isModified
+                  ? modifiedAchievements.get(achievement.id)!
+                  : achievement.isAchieved
 
-          <div className="space-y-2">
-            {gameData?.achievements.map(achievement => {
-              const isModified = modifiedAchievements.has(achievement.id)
-              const currentValue = isModified
-                ? modifiedAchievements.get(achievement.id)!
-                : achievement.isAchieved
-
-              return (
-                <AchievementItem
-                  key={achievement.id}
-                  achievement={achievement}
-                  currentValue={currentValue}
-                  isModified={isModified}
-                  onToggle={handleAchievementToggle}
-                />
-              )
-            })}
-          </div>
+                return (
+                  <AchievementItem
+                    key={achievement.id}
+                    achievement={achievement}
+                    appId={numericAppId}
+                    currentValue={currentValue}
+                    isModified={isModified}
+                    onToggle={handleAchievementToggle}
+                  />
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Stats Section */}
         <div>
-          <h3 className="text-lg font-semibold mb-4">
-            Stats ({gameData?.stats.length || 0})
-            {modifiedStats.size > 0 && (
-              <span className="text-sm text-yellow-600 dark:text-yellow-400 ml-2">
-                ({modifiedStats.size} modified)
-              </span>
-            )}
-          </h3>
-
-          <div className="space-y-2">
-            {gameData?.stats.map(stat => {
-              const originalStat = originalData?.stats.find(s => s.id === stat.id)
-              const isModified = modifiedStats.has(stat.id)
-              const validationError = validationErrors.get(stat.id)
-
-              return (
-                <StatItem
-                  key={stat.id}
-                  stat={stat}
-                  originalValue={originalStat?.value ?? stat.value}
-                  isModified={isModified}
-                  validationError={validationError}
-                  modifiedStats={modifiedStats}
-                  statInputs={statInputs}
-                  setStatInputs={setStatInputs}
-                  onUpdate={handleStatUpdate}
-                />
-              )
-            })}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
+            <h3 className="text-lg font-semibold whitespace-nowrap">
+              Stats ({gameData?.stats.length || 0})
+              {modifiedStats.size > 0 && (
+                <span className="text-sm text-primary ml-2">
+                  ({modifiedStats.size} modified)
+                </span>
+              )}
+            </h3>
           </div>
+
+          {(gameData?.stats.length ?? 0) === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+              <BarChart3 className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
+              <p className="text-sm font-medium text-white mb-1">No statistics</p>
+              <p className="text-xs text-muted-foreground/70">
+                This game doesn't have any statistics to manage.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {gameData?.stats.map(stat => {
+                const originalStat = originalData?.stats.find(s => s.id === stat.id)
+                const isModified = modifiedStats.has(stat.id)
+                const validationError = validationErrors.get(stat.id)
+
+                return (
+                  <StatItem
+                    key={stat.id}
+                    stat={stat}
+                    originalValue={originalStat?.value ?? stat.value}
+                    isModified={isModified}
+                    validationError={validationError}
+                    modifiedStats={modifiedStats}
+                    statInputs={statInputs}
+                    setStatInputs={setStatInputs}
+                    onUpdate={handleStatUpdate}
+                  />
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// Achievement icon component with CDN URL and fallback
+function AchievementIcon({
+  appId,
+  iconNormal,
+  iconLocked,
+  isUnlocked,
+  name
+}: {
+  appId: number
+  iconNormal: string | null
+  iconLocked: string | null
+  isUnlocked: boolean
+  name: string
+}) {
+  const [imageError, setImageError] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
+
+  // Select icon based on current unlock state
+  // If locked and iconLocked is empty, fall back to iconNormal
+  const iconPath = isUnlocked
+    ? iconNormal
+    : (iconLocked || iconNormal)
+
+  // Build URL - handle both full URLs and file names
+  const imageUrl = iconPath
+    ? (iconPath.startsWith('http')
+        ? iconPath
+        : `https://cdn.steamstatic.com/steamcommunity/public/images/apps/${appId}/${iconPath}`)
+    : null
+
+  // Reset state when icon changes
+  useEffect(() => {
+    setImageError(false)
+    setImageLoaded(false)
+  }, [iconPath, appId])
+
+  // No icon available - show placeholder
+  if (!imageUrl || imageError) {
+    return (
+      <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
+        <Trophy className="w-6 h-6 text-muted-foreground/40" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-white/5 border border-white/10">
+      {/* Placeholder visible until loaded */}
+      {!imageLoaded && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Trophy className="w-6 h-6 text-muted-foreground/40" />
+        </div>
+      )}
+
+      <img
+        src={imageUrl}
+        alt={`${name} icon`}
+        loading="lazy"
+        className={cn(
+          'w-full h-full object-cover transition-opacity duration-200',
+          imageLoaded ? 'opacity-100' : 'opacity-0',
+          // Desaturate locked achievements slightly
+          !isUnlocked && 'grayscale-[30%] opacity-70'
+        )}
+        onLoad={() => setImageLoaded(true)}
+        onError={() => setImageError(true)}
+      />
     </div>
   )
 }
@@ -562,11 +750,13 @@ export default function ManagerView() {
 // Achievement item component
 function AchievementItem({
   achievement,
+  appId,
   currentValue,
   isModified,
   onToggle
 }: {
   achievement: Achievement
+  appId: number
   currentValue: boolean
   isModified: boolean
   onToggle: (id: string, unlocked: boolean) => void
@@ -574,39 +764,57 @@ function AchievementItem({
   return (
     <div
       className={cn(
-        'p-4 border rounded-lg flex items-center justify-between',
-        isModified && 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20'
+        'p-4 rounded-xl border transition-all duration-200 flex items-center gap-3',
+        'bg-gradient-to-br from-[#12091f] via-[#0e0819] to-[#0a0612]',
+        'border-white/10 shadow-[0_10px_35px_rgba(0,0,0,0.4)]',
+        'backdrop-blur-sm',
+        'focus-visible:ring-2 focus-visible:ring-primary/50',
+        // Modified state: purple accent
+        isModified && 'border-primary/50 shadow-[0_0_20px_rgba(168,85,247,0.25)]',
+        isModified && 'bg-gradient-to-br from-[#1a0d2e] via-[#12091f] to-[#0e0819]'
       )}
     >
-      <div className="flex-1">
-        <div className="flex items-center gap-2">
+      {/* Achievement Icon */}
+      <AchievementIcon
+        appId={appId}
+        iconNormal={achievement.iconNormal}
+        iconLocked={achievement.iconLocked}
+        isUnlocked={currentValue}
+        name={achievement.name}
+      />
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
           <p
             className={cn(
-              'font-medium',
-              achievement.isProtected && 'text-red-600 dark:text-red-400'
+              'font-medium truncate',
+              achievement.isProtected && 'text-red-400'
             )}
           >
             {achievement.name}
           </p>
           {achievement.isProtected && (
-            <span className="text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 px-2 py-0.5 rounded">
+            <span className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-md">
               Protected
             </span>
           )}
           {achievement.isHidden && (
-            <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded">
+            <span className="text-xs bg-white/5 text-muted-foreground border border-white/10 px-2 py-0.5 rounded-md">
               Hidden
             </span>
           )}
         </div>
-        <p className="text-sm text-muted-foreground">{achievement.description}</p>
+        <p className="text-sm text-muted-foreground line-clamp-2">{achievement.description}</p>
         {achievement.unlockTime && (
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-xs text-muted-foreground/70 mt-1">
             Unlocked: {new Date(achievement.unlockTime).toLocaleString()}
           </p>
         )}
       </div>
+
       <Switch
+        className="data-[state=unchecked]:bg-zinc-700/80 data-[state=checked]:shadow-[0_0_12px_rgba(168,85,247,0.5)]"
+        thumbClassName="data-[state=unchecked]:bg-zinc-400 data-[state=checked]:bg-white"
         checked={currentValue}
         onCheckedChange={checked => onToggle(achievement.id, checked)}
         disabled={achievement.isProtected}
@@ -670,23 +878,30 @@ function StatItem({
   return (
     <div
       className={cn(
-        'p-4 border rounded-lg',
-        isModified && 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20',
-        validationError && 'border-red-500'
+        'p-4 rounded-xl border transition-all duration-200',
+        'bg-gradient-to-br from-[#0f0a1a] via-[#0a0714] to-[#08050f]',
+        'border-white/10 shadow-[0_10px_35px_rgba(0,0,0,0.4)]',
+        'backdrop-blur-sm',
+        'focus-within:ring-2 focus-within:ring-primary/50',
+        // Modified state: purple accent
+        isModified && 'border-primary/50 shadow-[0_0_20px_rgba(168,85,247,0.25)]',
+        isModified && 'bg-gradient-to-br from-[#1a0d2e] via-[#12091f] to-[#0e0819]',
+        // Validation error: red glow
+        validationError && 'border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
       )}
     >
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <p className={cn('font-medium', stat.isProtected && 'text-red-600 dark:text-red-400')}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <p className={cn('font-medium', stat.isProtected && 'text-red-400')}>
             {stat.displayName}
           </p>
           {stat.isProtected && (
-            <span className="text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 px-2 py-0.5 rounded">
+            <span className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-md">
               Protected
             </span>
           )}
           {stat.incrementOnly && (
-            <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">
+            <span className="text-xs bg-primary/15 text-primary border border-primary/30 px-2 py-0.5 rounded-md">
               Increment Only
             </span>
           )}
@@ -701,16 +916,16 @@ function StatItem({
         onBlur={handleBlur}
         disabled={stat.isProtected}
         step={stat.type === 'float' ? '0.01' : '1'}
-        className={validationError && 'border-red-500'}
+        className={cn(validationError && 'border-red-500/60')}
       />
 
-      <div className="flex justify-between text-xs text-muted-foreground mt-1">
+      <div className="flex justify-between text-xs text-muted-foreground/70 mt-1">
         <span>Min: {stat.minValue}</span>
         <span>Max: {stat.maxValue}</span>
       </div>
 
       {validationError && (
-        <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationError}</p>
+        <p className="text-xs text-red-400 mt-1">{validationError}</p>
       )}
     </div>
   )

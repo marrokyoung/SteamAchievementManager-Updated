@@ -24,7 +24,8 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -544,7 +545,7 @@ export default function ManagerView() {
       <div className="grid md:grid-cols-2 gap-6">
         {/* Achievements Section */}
         <div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
+          <div className="mb-4 space-y-2">
             <h3 className="text-lg font-semibold whitespace-nowrap">
               Achievements ({gameData?.achievements.length || 0})
               {modifiedAchievements.size > 0 && (
@@ -554,7 +555,7 @@ export default function ManagerView() {
               )}
             </h3>
             {(gameData?.achievements.length ?? 0) > 0 && (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={handleUnlockAll}>
                   <Unlock className="h-3 w-3 mr-1" />
                   Unlock All
@@ -571,24 +572,23 @@ export default function ManagerView() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem
-                      onClick={() => { setSortOrder('default'); setSortKey(k => k + 1) }}
-                      className={sortOrder === 'default' ? 'bg-accent' : ''}
+                    <DropdownMenuRadioGroup
+                      value={sortOrder}
+                      onValueChange={(value) => {
+                        setSortOrder(value as 'default' | 'unlocked' | 'locked')
+                        setSortKey(k => k + 1)
+                      }}
                     >
-                      Default Order
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => { setSortOrder('unlocked'); setSortKey(k => k + 1) }}
-                      className={sortOrder === 'unlocked' ? 'bg-accent' : ''}
-                    >
-                      Unlocked First
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => { setSortOrder('locked'); setSortKey(k => k + 1) }}
-                      className={sortOrder === 'locked' ? 'bg-accent' : ''}
-                    >
-                      Locked First
-                    </DropdownMenuItem>
+                      <DropdownMenuRadioItem value="default">
+                        Default Order
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="unlocked">
+                        Unlocked First
+                      </DropdownMenuRadioItem>
+                      <DropdownMenuRadioItem value="locked">
+                        Locked First
+                      </DropdownMenuRadioItem>
+                    </DropdownMenuRadioGroup>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -604,25 +604,27 @@ export default function ManagerView() {
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {sortedAchievements.map(achievement => {
-                const isModified = modifiedAchievements.has(achievement.id)
-                const currentValue = isModified
-                  ? modifiedAchievements.get(achievement.id)!
-                  : achievement.isAchieved
+            <TooltipProvider delayDuration={400}>
+              <div className="space-y-2">
+                {sortedAchievements.map(achievement => {
+                  const isModified = modifiedAchievements.has(achievement.id)
+                  const currentValue = isModified
+                    ? modifiedAchievements.get(achievement.id)!
+                    : achievement.isAchieved
 
-                return (
-                  <AchievementItem
-                    key={achievement.id}
-                    achievement={achievement}
-                    appId={numericAppId}
-                    currentValue={currentValue}
-                    isModified={isModified}
-                    onToggle={handleAchievementToggle}
-                  />
-                )
-              })}
-            </div>
+                  return (
+                    <AchievementItem
+                      key={achievement.id}
+                      achievement={achievement}
+                      appId={numericAppId}
+                      currentValue={currentValue}
+                      isModified={isModified}
+                      onToggle={handleAchievementToggle}
+                    />
+                  )
+                })}
+              </div>
+            </TooltipProvider>
           )}
         </div>
 
@@ -692,12 +694,12 @@ function AchievementIcon({
 }) {
   const [imageError, setImageError] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
+  const [fallbackToLocked, setFallbackToLocked] = useState(false)
 
-  // Select icon based on current unlock state
-  // If locked and iconLocked is empty, fall back to iconNormal
-  const iconPath = isUnlocked
-    ? iconNormal
-    : (iconLocked || iconNormal)
+  // Prefer the normal icon for consistency; only fall back to locked if needed.
+  const primaryIconPath = iconNormal || iconLocked
+  const canFallbackToLocked = !isUnlocked && iconNormal && iconLocked
+  const iconPath = canFallbackToLocked && fallbackToLocked ? iconLocked : primaryIconPath
 
   // Build URL - handle both full URLs and file names
   const imageUrl = iconPath
@@ -710,19 +712,20 @@ function AchievementIcon({
   useEffect(() => {
     setImageError(false)
     setImageLoaded(false)
-  }, [iconPath, appId])
+    setFallbackToLocked(false)
+  }, [primaryIconPath, appId])
 
   // No icon available - show placeholder
   if (!imageUrl || imageError) {
     return (
-      <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
+      <div className="w-12 h-12 rounded-lg bg-transparent flex items-center justify-center flex-shrink-0">
         <Trophy className="w-6 h-6 text-muted-foreground/40" />
       </div>
     )
   }
 
   return (
-    <div className="relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-white/5 border border-white/10">
+    <div className="relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-transparent">
       {/* Placeholder visible until loaded */}
       {!imageLoaded && (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -741,7 +744,14 @@ function AchievementIcon({
           !isUnlocked && 'grayscale-[30%] opacity-70'
         )}
         onLoad={() => setImageLoaded(true)}
-        onError={() => setImageError(true)}
+        onError={() => {
+          if (canFallbackToLocked && !fallbackToLocked) {
+            setFallbackToLocked(true)
+            setImageLoaded(false)
+            return
+          }
+          setImageError(true)
+        }}
       />
     </div>
   )
@@ -765,13 +775,13 @@ function AchievementItem({
     <div
       className={cn(
         'p-4 rounded-xl border transition-all duration-200 flex items-center gap-3',
-        'bg-gradient-to-br from-[#12091f] via-[#0e0819] to-[#0a0612]',
+        'bg-gradient-to-br from-[#221239] via-[#140d26] to-[#0c0818]',
         'border-white/10 shadow-[0_10px_35px_rgba(0,0,0,0.4)]',
         'backdrop-blur-sm',
         'focus-visible:ring-2 focus-visible:ring-primary/50',
         // Modified state: purple accent
         isModified && 'border-primary/50 shadow-[0_0_20px_rgba(168,85,247,0.25)]',
-        isModified && 'bg-gradient-to-br from-[#1a0d2e] via-[#12091f] to-[#0e0819]'
+        isModified && 'bg-gradient-to-br from-[#2b1a4a] via-[#1b1235] to-[#120b24]'
       )}
     >
       {/* Achievement Icon */}
@@ -804,7 +814,18 @@ function AchievementItem({
             </span>
           )}
         </div>
-        <p className="text-sm text-muted-foreground line-clamp-2">{achievement.description}</p>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <p
+              className="text-sm text-muted-foreground line-clamp-2 cursor-default"
+            >
+              {achievement.description}
+            </p>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs">
+            <p>{achievement.description}</p>
+          </TooltipContent>
+        </Tooltip>
         {achievement.unlockTime && (
           <p className="text-xs text-muted-foreground/70 mt-1">
             Unlocked: {new Date(achievement.unlockTime).toLocaleString()}
@@ -879,13 +900,13 @@ function StatItem({
     <div
       className={cn(
         'p-4 rounded-xl border transition-all duration-200',
-        'bg-gradient-to-br from-[#0f0a1a] via-[#0a0714] to-[#08050f]',
+        'bg-gradient-to-br from-[#221239] via-[#140d26] to-[#0c0818]',
         'border-white/10 shadow-[0_10px_35px_rgba(0,0,0,0.4)]',
         'backdrop-blur-sm',
         'focus-within:ring-2 focus-within:ring-primary/50',
         // Modified state: purple accent
         isModified && 'border-primary/50 shadow-[0_0_20px_rgba(168,85,247,0.25)]',
-        isModified && 'bg-gradient-to-br from-[#1a0d2e] via-[#12091f] to-[#0e0819]',
+        isModified && 'bg-gradient-to-br from-[#2b1a4a] via-[#1b1235] to-[#120b24]',
         // Validation error: red glow
         validationError && 'border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
       )}

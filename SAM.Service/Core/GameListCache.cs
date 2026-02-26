@@ -8,7 +8,7 @@ namespace SAM.Service.Core
     public class GameListCache : IDisposable
     {
         // Cache version - increment when GameDto schema changes or image selection logic changes
-        private const int CACHE_VERSION = 5; // Bumped after image/logo fallback flow changes
+        private const int CACHE_VERSION = 6; // Bumped after store metadata fallback for demo detection
 
         private class CacheEntry
         {

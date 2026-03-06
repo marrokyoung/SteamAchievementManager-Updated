@@ -17,10 +17,10 @@ import {
 import type { Game } from '@/types/api'
 
 const GAME_TYPES = [
-  { value: 'normal', label: 'Games', color: 'purple' },
-  { value: 'demo', label: 'Demos', color: 'purple' },
-  { value: 'mod', label: 'Mods', color: 'purple' },
-  { value: 'junk', label: 'Junk', color: 'purple' }
+  { value: 'normal', label: 'Games' },
+  { value: 'demo', label: 'Demos' },
+  { value: 'mod', label: 'Mods' },
+  { value: 'junk', label: 'Junk' }
 ] as const
 
 const normalizeGameType = (type: string) => {
@@ -170,9 +170,8 @@ export default function PickerView() {
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button
-                variant={activeFilters.size > 0 && !showAllTypes ? 'default' : 'outline'}
-                size="sm"
-                className="min-w-[140px]"
+                variant="default"
+                className="h-11 min-w-[140px]"
               >
                 <Filter className="h-4 w-4 mr-2" />
                 Filter Types
@@ -221,11 +220,13 @@ export default function PickerView() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={() => refetch()} 
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-11 w-11"
+            onClick={() => refetch()}
             title="Refresh games"
+            aria-label="Refresh games"
           >
             <RefreshCw className="h-4 w-4" />
           </Button>
@@ -291,15 +292,7 @@ function GameCard({
   const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null)
   const [fallbackStep, setFallbackStep] = useState(0)
   const [isLogoFallback, setIsLogoFallback] = useState(false)
-  const normalizedType = normalizeGameType(game.type)
-  const typeConfig = GAME_TYPES.find(t => t.value === normalizedType)
   const hasArt = !!currentImageUrl && !imageError
-  const badgeTone =
-    normalizedType === 'demo'
-      ? 'bg-purple-500/80'
-      : normalizedType === 'junk'
-        ? 'bg-purple-700/80'
-        : 'bg-purple-600/80'
 
   // Track if component is mounted (for async safety in ALL async operations)
   const isMountedRef = useRef(true)
@@ -444,25 +437,11 @@ function GameCard({
           {game.name}
         </p>
 
-        <div className="flex items-center gap-2">
-          {!game.owned && (
-            <span className="text-xs bg-yellow-400/90 text-yellow-950 px-2 py-0.5 rounded-full font-semibold shadow-sm">
-              Not Owned
-            </span>
-          )}
-
-          {typeConfig && (
-            <span
-              className={cn(
-                'text-xs px-2 py-0.5 rounded-full font-semibold border shadow-sm backdrop-blur-sm',
-                'text-white border-purple-200/40',
-                badgeTone
-              )}
-            >
-              {typeConfig.label}
-            </span>
-          )}
-        </div>
+        {!game.owned && (
+          <span className="text-xs bg-yellow-400/90 text-yellow-950 px-2 py-0.5 rounded-full font-semibold shadow-sm">
+            Not Owned
+          </span>
+        )}
       </div>
 
       {/* Loading indicator when initializing */}

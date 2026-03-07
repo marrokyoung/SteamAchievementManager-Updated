@@ -45,7 +45,8 @@ import {
   Unlock,
   Trophy,
   BarChart3,
-  ArrowUpDown
+  ArrowUpDown,
+  Search
 } from 'lucide-react'
 import type { GameData, Achievement, Stat } from '@/types/api'
 
@@ -68,6 +69,7 @@ export default function ManagerView() {
   const [serviceReady, setServiceReady] = useState(false)
   const [sortOrder, setSortOrder] = useState<'default' | 'unlocked' | 'locked'>('default')
   const [sortKey, setSortKey] = useState(0)
+  const [achievementSearchQuery, setAchievementSearchQuery] = useState('')
 
   // Queries and mutations - only enable after service is ready
   const { data: gameData, isLoading, error, refetch, isRefetching } = useGameData(numericAppId, serviceReady)
@@ -114,6 +116,16 @@ export default function ManagerView() {
       return x.i - y.i
     }).map(x => x.a)
   }, [gameData?.achievements, sortOrder, sortSnapshot])
+
+  // Filter achievements by search query (applied after sorting)
+  const filteredAchievements = useMemo(() => {
+    const q = achievementSearchQuery.trim().toLowerCase()
+    if (!q) return sortedAchievements
+    return sortedAchievements.filter(a =>
+      a.name.toLowerCase().includes(q) ||
+      a.description?.toLowerCase().includes(q)
+    )
+  }, [sortedAchievements, achievementSearchQuery])
 
   // Sync originalData on every refetch
   useEffect(() => {
@@ -593,6 +605,24 @@ export default function ManagerView() {
                 </DropdownMenu>
               </div>
             )}
+            {(gameData?.achievements.length ?? 0) > 0 && (
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground/70 z-10 pointer-events-none" />
+                <Input
+                  type="text"
+                  placeholder="Search by name or description..."
+                  className="pl-10 h-9 text-sm"
+                  value={achievementSearchQuery}
+                  onChange={(e) => setAchievementSearchQuery(e.target.value)}
+                  aria-label="Search achievements"
+                />
+              </div>
+            )}
+            {achievementSearchQuery.trim() && (
+              <p className="text-xs text-muted-foreground/80">
+                Showing {filteredAchievements.length} of {gameData?.achievements.length || 0} achievements
+              </p>
+            )}
           </div>
 
           {(gameData?.achievements.length ?? 0) === 0 ? (
@@ -603,10 +633,18 @@ export default function ManagerView() {
                 This game doesn't have any achievements to manage.
               </p>
             </div>
+          ) : filteredAchievements.length === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+              <Search className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
+              <p className="text-sm font-medium text-white mb-1">No matches</p>
+              <p className="text-xs text-muted-foreground/70">
+                No achievements match "{achievementSearchQuery.trim()}"
+              </p>
+            </div>
           ) : (
             <TooltipProvider delayDuration={400}>
               <div className="space-y-2">
-                {sortedAchievements.map(achievement => {
+                {filteredAchievements.map(achievement => {
                   const isModified = modifiedAchievements.has(achievement.id)
                   const currentValue = isModified
                     ? modifiedAchievements.get(achievement.id)!

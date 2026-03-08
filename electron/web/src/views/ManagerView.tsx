@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useDeferredValue, useCallback, memo } from 'react'
 import type React from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
@@ -86,6 +86,20 @@ export default function ManagerView() {
     updateStatsMutation.isPending ||
     storeChangesMutation.isPending
 
+  // Fast lookup maps used by handlers and derived render data
+  const achievementsById = useMemo(
+    () => new Map((gameData?.achievements ?? []).map(a => [a.id, a])),
+    [gameData?.achievements]
+  )
+  const statsById = useMemo(
+    () => new Map((gameData?.stats ?? []).map(s => [s.id, s])),
+    [gameData?.stats]
+  )
+  const originalStatsById = useMemo(
+    () => new Map((originalData?.stats ?? []).map(s => [s.id, s])),
+    [originalData?.stats]
+  )
+
   // Capture achievement states at sort-time (only updates when sortKey changes)
   const sortSnapshot = useMemo(() => {
     const snapshot = new Map<string, boolean>()
@@ -117,15 +131,26 @@ export default function ManagerView() {
     }).map(x => x.a)
   }, [gameData?.achievements, sortOrder, sortSnapshot])
 
+  // Deferred query so typing stays responsive on large lists
+  const deferredSearchQuery = useDeferredValue(achievementSearchQuery)
+
+  // Pre-compute lowercase searchable text once per achievement list change
+  const searchIndex = useMemo(() => {
+    if (!gameData?.achievements) return new Map<string, string>()
+    return new Map(
+      gameData.achievements.map(a => [
+        a.id,
+        `${a.name}\0${a.description ?? ''}`.toLowerCase()
+      ])
+    )
+  }, [gameData?.achievements])
+
   // Filter achievements by search query (applied after sorting)
   const filteredAchievements = useMemo(() => {
-    const q = achievementSearchQuery.trim().toLowerCase()
+    const q = deferredSearchQuery.trim().toLowerCase()
     if (!q) return sortedAchievements
-    return sortedAchievements.filter(a =>
-      a.name.toLowerCase().includes(q) ||
-      a.description?.toLowerCase().includes(q)
-    )
-  }, [sortedAchievements, achievementSearchQuery])
+    return sortedAchievements.filter(a => searchIndex.get(a.id)?.includes(q))
+  }, [sortedAchievements, deferredSearchQuery, searchIndex])
 
   // Sync originalData on every refetch
   useEffect(() => {
@@ -201,8 +226,8 @@ export default function ManagerView() {
   }, [appId, numericAppId, navigate])
 
   // Achievement toggle handler
-  const handleAchievementToggle = (id: string, unlocked: boolean) => {
-    const achievement = gameData?.achievements.find(a => a.id === id)
+  const handleAchievementToggle = useCallback((id: string, unlocked: boolean) => {
+    const achievement = achievementsById.get(id)
     if (!achievement) return
 
     // Client-side protected check
@@ -227,12 +252,12 @@ export default function ManagerView() {
 
       return next
     })
-  }
+  }, [achievementsById])
 
   // Stat update handler with validation
-  const handleStatUpdate = (id: string, value: number) => {
-    const stat = gameData?.stats.find(s => s.id === id)
-    const originalStat = originalData?.stats.find(s => s.id === id)
+  const handleStatUpdate = useCallback((id: string, value: number) => {
+    const stat = statsById.get(id)
+    const originalStat = originalStatsById.get(id)
     if (!stat) return
 
     // Protected check
@@ -288,7 +313,60 @@ export default function ManagerView() {
 
       return next
     })
-  }
+  }, [statsById, originalStatsById])
+
+  // Render-heavy list JSX is memoized so typing in search doesn't remap unchanged lists
+  const achievementItems = useMemo(() => {
+    return filteredAchievements.map(achievement => {
+      const isModified = modifiedAchievements.has(achievement.id)
+      const currentValue = isModified
+        ? modifiedAchievements.get(achievement.id)!
+        : achievement.isAchieved
+
+      return (
+        <AchievementItem
+          key={achievement.id}
+          achievement={achievement}
+          appId={numericAppId}
+          currentValue={currentValue}
+          isModified={isModified}
+          onToggle={handleAchievementToggle}
+        />
+      )
+    })
+  }, [filteredAchievements, modifiedAchievements, numericAppId, handleAchievementToggle])
+
+  const statItems = useMemo(() => {
+    if (!gameData?.stats) return []
+
+    return gameData.stats.map(stat => {
+      const originalStat = originalStatsById.get(stat.id)
+      const isModified = modifiedStats.has(stat.id)
+      const validationError = validationErrors.get(stat.id)
+
+      return (
+        <StatItem
+          key={stat.id}
+          stat={stat}
+          originalValue={originalStat?.value ?? stat.value}
+          isModified={isModified}
+          validationError={validationError}
+          modifiedStats={modifiedStats}
+          statInputs={statInputs}
+          setStatInputs={setStatInputs}
+          onUpdate={handleStatUpdate}
+        />
+      )
+    })
+  }, [
+    gameData?.stats,
+    originalStatsById,
+    modifiedStats,
+    validationErrors,
+    statInputs,
+    setStatInputs,
+    handleStatUpdate
+  ])
 
   // Save flow
   const handleSave = async () => {
@@ -644,23 +722,7 @@ export default function ManagerView() {
           ) : (
             <TooltipProvider delayDuration={400}>
               <div className="space-y-2">
-                {filteredAchievements.map(achievement => {
-                  const isModified = modifiedAchievements.has(achievement.id)
-                  const currentValue = isModified
-                    ? modifiedAchievements.get(achievement.id)!
-                    : achievement.isAchieved
-
-                  return (
-                    <AchievementItem
-                      key={achievement.id}
-                      achievement={achievement}
-                      appId={numericAppId}
-                      currentValue={currentValue}
-                      isModified={isModified}
-                      onToggle={handleAchievementToggle}
-                    />
-                  )
-                })}
+                {achievementItems}
               </div>
             </TooltipProvider>
           )}
@@ -689,25 +751,7 @@ export default function ManagerView() {
             </div>
           ) : (
             <div className="space-y-2">
-              {gameData?.stats.map(stat => {
-                const originalStat = originalData?.stats.find(s => s.id === stat.id)
-                const isModified = modifiedStats.has(stat.id)
-                const validationError = validationErrors.get(stat.id)
-
-                return (
-                  <StatItem
-                    key={stat.id}
-                    stat={stat}
-                    originalValue={originalStat?.value ?? stat.value}
-                    isModified={isModified}
-                    validationError={validationError}
-                    modifiedStats={modifiedStats}
-                    statInputs={statInputs}
-                    setStatInputs={setStatInputs}
-                    onUpdate={handleStatUpdate}
-                  />
-                )
-              })}
+              {statItems}
             </div>
           )}
         </div>
@@ -796,7 +840,7 @@ function AchievementIcon({
 }
 
 // Achievement item component
-function AchievementItem({
+const AchievementItem = memo(function AchievementItem({
   achievement,
   appId,
   currentValue,
@@ -832,22 +876,22 @@ function AchievementItem({
       />
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <p
             className={cn(
-              'font-medium truncate',
+              'font-medium truncate min-w-0',
               achievement.isProtected && 'text-red-400'
             )}
           >
             {achievement.name}
           </p>
           {achievement.isProtected && (
-            <span className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-md">
+            <span className="shrink-0 text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-md">
               Protected
             </span>
           )}
           {achievement.isHidden && (
-            <span className="text-xs bg-white/5 text-muted-foreground border border-white/10 px-2 py-0.5 rounded-md">
+            <span className="shrink-0 text-xs bg-white/5 text-muted-foreground border border-white/10 px-2 py-0.5 rounded-md">
               Hidden
             </span>
           )}
@@ -880,7 +924,7 @@ function AchievementItem({
       />
     </div>
   )
-}
+})
 
 // Stat item component
 function StatItem({

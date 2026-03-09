@@ -50,6 +50,15 @@ import {
 } from 'lucide-react'
 import type { GameData, Achievement, Stat } from '@/types/api'
 
+// Cache successfully loaded icon URLs so reordered lists don't flash placeholders.
+const loadedAchievementIconUrls = new Set<string>()
+
+function buildAchievementIconUrl(appId: number, iconPath: string | null): string | null {
+  if (!iconPath) return null
+  if (iconPath.startsWith('http')) return iconPath
+  return `https://cdn.steamstatic.com/steamcommunity/public/images/apps/${appId}/${iconPath}`
+}
+
 export default function ManagerView() {
   const { appId } = useParams<{ appId: string }>()
   const navigate = useNavigate()
@@ -783,19 +792,23 @@ function AchievementIcon({
   const canFallbackToLocked = !isUnlocked && iconNormal && iconLocked
   const iconPath = canFallbackToLocked && fallbackToLocked ? iconLocked : primaryIconPath
 
-  // Build URL - handle both full URLs and file names
-  const imageUrl = iconPath
-    ? (iconPath.startsWith('http')
-        ? iconPath
-        : `https://cdn.steamstatic.com/steamcommunity/public/images/apps/${appId}/${iconPath}`)
-    : null
+  // Primary URL (without fallback) used to seed load state from cache.
+  const primaryImageUrl = buildAchievementIconUrl(appId, primaryIconPath)
+  const imageUrl = buildAchievementIconUrl(appId, iconPath)
 
   // Reset state when icon changes
   useEffect(() => {
     setImageError(false)
-    setImageLoaded(false)
     setFallbackToLocked(false)
-  }, [primaryIconPath, appId])
+    setImageLoaded(primaryImageUrl ? loadedAchievementIconUrls.has(primaryImageUrl) : false)
+  }, [primaryImageUrl])
+
+  // If fallback URL is already cached, show it immediately.
+  useEffect(() => {
+    if (imageUrl && loadedAchievementIconUrls.has(imageUrl)) {
+      setImageLoaded(true)
+    }
+  }, [imageUrl])
 
   // No icon available - show placeholder
   if (!imageUrl || imageError) {
@@ -825,7 +838,10 @@ function AchievementIcon({
           // Desaturate locked achievements slightly
           !isUnlocked && 'grayscale-[30%] opacity-70'
         )}
-        onLoad={() => setImageLoaded(true)}
+        onLoad={(e) => {
+          loadedAchievementIconUrls.add(e.currentTarget.currentSrc || e.currentTarget.src)
+          setImageLoaded(true)
+        }}
         onError={() => {
           if (canFallbackToLocked && !fallbackToLocked) {
             setFallbackToLocked(true)

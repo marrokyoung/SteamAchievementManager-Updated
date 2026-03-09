@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useDeferredValue, useCallback, memo } from 'react'
 import type React from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
@@ -45,9 +45,19 @@ import {
   Unlock,
   Trophy,
   BarChart3,
-  ArrowUpDown
+  ArrowUpDown,
+  Search
 } from 'lucide-react'
 import type { GameData, Achievement, Stat } from '@/types/api'
+
+// Cache successfully loaded icon URLs so reordered lists don't flash placeholders.
+const loadedAchievementIconUrls = new Set<string>()
+
+function buildAchievementIconUrl(appId: number, iconPath: string | null): string | null {
+  if (!iconPath) return null
+  if (iconPath.startsWith('http')) return iconPath
+  return `https://cdn.steamstatic.com/steamcommunity/public/images/apps/${appId}/${iconPath}`
+}
 
 export default function ManagerView() {
   const { appId } = useParams<{ appId: string }>()
@@ -68,6 +78,7 @@ export default function ManagerView() {
   const [serviceReady, setServiceReady] = useState(false)
   const [sortOrder, setSortOrder] = useState<'default' | 'unlocked' | 'locked'>('default')
   const [sortKey, setSortKey] = useState(0)
+  const [achievementSearchQuery, setAchievementSearchQuery] = useState('')
 
   // Queries and mutations - only enable after service is ready
   const { data: gameData, isLoading, error, refetch, isRefetching } = useGameData(numericAppId, serviceReady)
@@ -83,6 +94,20 @@ export default function ManagerView() {
     updateAchievementsMutation.isPending ||
     updateStatsMutation.isPending ||
     storeChangesMutation.isPending
+
+  // Fast lookup maps used by handlers and derived render data
+  const achievementsById = useMemo(
+    () => new Map((gameData?.achievements ?? []).map(a => [a.id, a])),
+    [gameData?.achievements]
+  )
+  const statsById = useMemo(
+    () => new Map((gameData?.stats ?? []).map(s => [s.id, s])),
+    [gameData?.stats]
+  )
+  const originalStatsById = useMemo(
+    () => new Map((originalData?.stats ?? []).map(s => [s.id, s])),
+    [originalData?.stats]
+  )
 
   // Capture achievement states at sort-time (only updates when sortKey changes)
   const sortSnapshot = useMemo(() => {
@@ -114,6 +139,27 @@ export default function ManagerView() {
       return x.i - y.i
     }).map(x => x.a)
   }, [gameData?.achievements, sortOrder, sortSnapshot])
+
+  // Deferred query so typing stays responsive on large lists
+  const deferredSearchQuery = useDeferredValue(achievementSearchQuery)
+
+  // Pre-compute lowercase searchable text once per achievement list change
+  const searchIndex = useMemo(() => {
+    if (!gameData?.achievements) return new Map<string, string>()
+    return new Map(
+      gameData.achievements.map(a => [
+        a.id,
+        `${a.name}\0${a.description ?? ''}`.toLowerCase()
+      ])
+    )
+  }, [gameData?.achievements])
+
+  // Filter achievements by search query (applied after sorting)
+  const filteredAchievements = useMemo(() => {
+    const q = deferredSearchQuery.trim().toLowerCase()
+    if (!q) return sortedAchievements
+    return sortedAchievements.filter(a => searchIndex.get(a.id)?.includes(q))
+  }, [sortedAchievements, deferredSearchQuery, searchIndex])
 
   // Sync originalData on every refetch
   useEffect(() => {
@@ -188,9 +234,14 @@ export default function ManagerView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appId, numericAppId, navigate])
 
+  // Clear icon cache when switching games so it doesn't grow indefinitely across sessions
+  useEffect(() => {
+    loadedAchievementIconUrls.clear()
+  }, [numericAppId])
+
   // Achievement toggle handler
-  const handleAchievementToggle = (id: string, unlocked: boolean) => {
-    const achievement = gameData?.achievements.find(a => a.id === id)
+  const handleAchievementToggle = useCallback((id: string, unlocked: boolean) => {
+    const achievement = achievementsById.get(id)
     if (!achievement) return
 
     // Client-side protected check
@@ -215,12 +266,12 @@ export default function ManagerView() {
 
       return next
     })
-  }
+  }, [achievementsById])
 
   // Stat update handler with validation
-  const handleStatUpdate = (id: string, value: number) => {
-    const stat = gameData?.stats.find(s => s.id === id)
-    const originalStat = originalData?.stats.find(s => s.id === id)
+  const handleStatUpdate = useCallback((id: string, value: number) => {
+    const stat = statsById.get(id)
+    const originalStat = originalStatsById.get(id)
     if (!stat) return
 
     // Protected check
@@ -276,7 +327,60 @@ export default function ManagerView() {
 
       return next
     })
-  }
+  }, [statsById, originalStatsById])
+
+  // Render-heavy list JSX is memoized so typing in search doesn't remap unchanged lists
+  const achievementItems = useMemo(() => {
+    return filteredAchievements.map(achievement => {
+      const isModified = modifiedAchievements.has(achievement.id)
+      const currentValue = isModified
+        ? modifiedAchievements.get(achievement.id)!
+        : achievement.isAchieved
+
+      return (
+        <AchievementItem
+          key={achievement.id}
+          achievement={achievement}
+          appId={numericAppId}
+          currentValue={currentValue}
+          isModified={isModified}
+          onToggle={handleAchievementToggle}
+        />
+      )
+    })
+  }, [filteredAchievements, modifiedAchievements, numericAppId, handleAchievementToggle])
+
+  const statItems = useMemo(() => {
+    if (!gameData?.stats) return []
+
+    return gameData.stats.map(stat => {
+      const originalStat = originalStatsById.get(stat.id)
+      const isModified = modifiedStats.has(stat.id)
+      const validationError = validationErrors.get(stat.id)
+
+      return (
+        <StatItem
+          key={stat.id}
+          stat={stat}
+          originalValue={originalStat?.value ?? stat.value}
+          isModified={isModified}
+          validationError={validationError}
+          modifiedStats={modifiedStats}
+          statInputs={statInputs}
+          setStatInputs={setStatInputs}
+          onUpdate={handleStatUpdate}
+        />
+      )
+    })
+  }, [
+    gameData?.stats,
+    originalStatsById,
+    modifiedStats,
+    validationErrors,
+    statInputs,
+    setStatInputs,
+    handleStatUpdate
+  ])
 
   // Save flow
   const handleSave = async () => {
@@ -593,6 +697,24 @@ export default function ManagerView() {
                 </DropdownMenu>
               </div>
             )}
+            {(gameData?.achievements.length ?? 0) > 0 && (
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground/70 z-10 pointer-events-none" />
+                <Input
+                  type="text"
+                  placeholder="Search by name or description..."
+                  className="pl-10 h-9 text-sm"
+                  value={achievementSearchQuery}
+                  onChange={(e) => setAchievementSearchQuery(e.target.value)}
+                  aria-label="Search achievements"
+                />
+              </div>
+            )}
+            {achievementSearchQuery.trim() && (
+              <p className="text-xs text-muted-foreground/80">
+                Showing {filteredAchievements.length} of {gameData?.achievements.length || 0} achievements
+              </p>
+            )}
           </div>
 
           {(gameData?.achievements.length ?? 0) === 0 ? (
@@ -603,26 +725,18 @@ export default function ManagerView() {
                 This game doesn't have any achievements to manage.
               </p>
             </div>
+          ) : filteredAchievements.length === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+              <Search className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
+              <p className="text-sm font-medium text-white mb-1">No matches</p>
+              <p className="text-xs text-muted-foreground/70">
+                No achievements match "{achievementSearchQuery.trim()}"
+              </p>
+            </div>
           ) : (
             <TooltipProvider delayDuration={400}>
               <div className="space-y-2">
-                {sortedAchievements.map(achievement => {
-                  const isModified = modifiedAchievements.has(achievement.id)
-                  const currentValue = isModified
-                    ? modifiedAchievements.get(achievement.id)!
-                    : achievement.isAchieved
-
-                  return (
-                    <AchievementItem
-                      key={achievement.id}
-                      achievement={achievement}
-                      appId={numericAppId}
-                      currentValue={currentValue}
-                      isModified={isModified}
-                      onToggle={handleAchievementToggle}
-                    />
-                  )
-                })}
+                {achievementItems}
               </div>
             </TooltipProvider>
           )}
@@ -651,25 +765,7 @@ export default function ManagerView() {
             </div>
           ) : (
             <div className="space-y-2">
-              {gameData?.stats.map(stat => {
-                const originalStat = originalData?.stats.find(s => s.id === stat.id)
-                const isModified = modifiedStats.has(stat.id)
-                const validationError = validationErrors.get(stat.id)
-
-                return (
-                  <StatItem
-                    key={stat.id}
-                    stat={stat}
-                    originalValue={originalStat?.value ?? stat.value}
-                    isModified={isModified}
-                    validationError={validationError}
-                    modifiedStats={modifiedStats}
-                    statInputs={statInputs}
-                    setStatInputs={setStatInputs}
-                    onUpdate={handleStatUpdate}
-                  />
-                )
-              })}
+              {statItems}
             </div>
           )}
         </div>
@@ -701,19 +797,23 @@ function AchievementIcon({
   const canFallbackToLocked = !isUnlocked && iconNormal && iconLocked
   const iconPath = canFallbackToLocked && fallbackToLocked ? iconLocked : primaryIconPath
 
-  // Build URL - handle both full URLs and file names
-  const imageUrl = iconPath
-    ? (iconPath.startsWith('http')
-        ? iconPath
-        : `https://cdn.steamstatic.com/steamcommunity/public/images/apps/${appId}/${iconPath}`)
-    : null
+  // Primary URL (without fallback) used to seed load state from cache.
+  const primaryImageUrl = buildAchievementIconUrl(appId, primaryIconPath)
+  const imageUrl = buildAchievementIconUrl(appId, iconPath)
 
   // Reset state when icon changes
   useEffect(() => {
     setImageError(false)
-    setImageLoaded(false)
     setFallbackToLocked(false)
-  }, [primaryIconPath, appId])
+    setImageLoaded(primaryImageUrl ? loadedAchievementIconUrls.has(primaryImageUrl) : false)
+  }, [primaryImageUrl])
+
+  // If fallback URL is already cached, show it immediately.
+  useEffect(() => {
+    if (imageUrl && loadedAchievementIconUrls.has(imageUrl)) {
+      setImageLoaded(true)
+    }
+  }, [imageUrl])
 
   // No icon available - show placeholder
   if (!imageUrl || imageError) {
@@ -743,7 +843,10 @@ function AchievementIcon({
           // Desaturate locked achievements slightly
           !isUnlocked && 'grayscale-[30%] opacity-70'
         )}
-        onLoad={() => setImageLoaded(true)}
+        onLoad={(e) => {
+          loadedAchievementIconUrls.add(e.currentTarget.currentSrc || e.currentTarget.src)
+          setImageLoaded(true)
+        }}
         onError={() => {
           if (canFallbackToLocked && !fallbackToLocked) {
             setFallbackToLocked(true)
@@ -758,7 +861,7 @@ function AchievementIcon({
 }
 
 // Achievement item component
-function AchievementItem({
+const AchievementItem = memo(function AchievementItem({
   achievement,
   appId,
   currentValue,
@@ -794,22 +897,22 @@ function AchievementItem({
       />
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           <p
             className={cn(
-              'font-medium truncate',
+              'font-medium truncate min-w-0',
               achievement.isProtected && 'text-red-400'
             )}
           >
             {achievement.name}
           </p>
           {achievement.isProtected && (
-            <span className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-md">
+            <span className="shrink-0 text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-md">
               Protected
             </span>
           )}
           {achievement.isHidden && (
-            <span className="text-xs bg-white/5 text-muted-foreground border border-white/10 px-2 py-0.5 rounded-md">
+            <span className="shrink-0 text-xs bg-white/5 text-muted-foreground border border-white/10 px-2 py-0.5 rounded-md">
               Hidden
             </span>
           )}
@@ -842,7 +945,7 @@ function AchievementItem({
       />
     </div>
   )
-}
+})
 
 // Stat item component
 function StatItem({

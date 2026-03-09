@@ -234,6 +234,11 @@ export default function ManagerView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appId, numericAppId, navigate])
 
+  // Clear icon cache when switching games so it doesn't grow indefinitely across sessions
+  useEffect(() => {
+    loadedAchievementIconUrls.clear()
+  }, [numericAppId])
+
   // Achievement toggle handler
   const handleAchievementToggle = useCallback((id: string, unlocked: boolean) => {
     const achievement = achievementsById.get(id)

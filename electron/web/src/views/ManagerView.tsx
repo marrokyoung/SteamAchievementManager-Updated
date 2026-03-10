@@ -79,6 +79,9 @@ export default function ManagerView() {
   const [sortOrder, setSortOrder] = useState<'default' | 'unlocked' | 'locked'>('default')
   const [sortKey, setSortKey] = useState(0)
   const [achievementSearchQuery, setAchievementSearchQuery] = useState('')
+  const [statSearchQuery, setStatSearchQuery] = useState('')
+  const [bulkActionDialogOpen, setBulkActionDialogOpen] = useState(false)
+  const [pendingBulkAction, setPendingBulkAction] = useState<'unlock' | 'lock' | null>(null)
 
   // Queries and mutations - only enable after service is ready
   const { data: gameData, isLoading, error, refetch, isRefetching } = useGameData(numericAppId, serviceReady)
@@ -160,6 +163,27 @@ export default function ManagerView() {
     if (!q) return sortedAchievements
     return sortedAchievements.filter(a => searchIndex.get(a.id)?.includes(q))
   }, [sortedAchievements, deferredSearchQuery, searchIndex])
+
+  const deferredStatSearchQuery = useDeferredValue(statSearchQuery)
+
+  // Pre-compute lowercase searchable text once per stat list change
+  const statSearchIndex = useMemo(() => {
+    if (!gameData?.stats) return new Map<string, string>()
+    return new Map(
+      gameData.stats.map(stat => [
+        stat.id,
+        `${stat.displayName}\0${stat.id}`.toLowerCase()
+      ])
+    )
+  }, [gameData?.stats])
+
+  // Filter stats by search query
+  const filteredStats = useMemo(() => {
+    if (!gameData?.stats) return []
+    const q = deferredStatSearchQuery.trim().toLowerCase()
+    if (!q) return gameData.stats
+    return gameData.stats.filter(stat => statSearchIndex.get(stat.id)?.includes(q))
+  }, [gameData?.stats, deferredStatSearchQuery, statSearchIndex])
 
   // Sync originalData on every refetch
   useEffect(() => {
@@ -351,9 +375,9 @@ export default function ManagerView() {
   }, [filteredAchievements, modifiedAchievements, numericAppId, handleAchievementToggle])
 
   const statItems = useMemo(() => {
-    if (!gameData?.stats) return []
+    if (!filteredStats.length) return []
 
-    return gameData.stats.map(stat => {
+    return filteredStats.map(stat => {
       const originalStat = originalStatsById.get(stat.id)
       const isModified = modifiedStats.has(stat.id)
       const validationError = validationErrors.get(stat.id)
@@ -373,7 +397,7 @@ export default function ManagerView() {
       )
     })
   }, [
-    gameData?.stats,
+    filteredStats,
     originalStatsById,
     modifiedStats,
     validationErrors,
@@ -458,23 +482,53 @@ export default function ManagerView() {
   }
 
   // Bulk operations
-  const handleUnlockAll = () => {
-    if (!window.confirm('Unlock all achievements?')) return
-
-    gameData?.achievements.forEach(achievement => {
-      if (!achievement.isProtected && !achievement.isAchieved) {
-        handleAchievementToggle(achievement.id, true)
-      }
-    })
+  const openBulkActionDialog = (action: 'unlock' | 'lock') => {
+    setPendingBulkAction(action)
+    setBulkActionDialogOpen(true)
   }
 
-  const handleLockAll = () => {
-    if (!window.confirm('Lock all achievements? This will mark them as not completed.')) return
+  const handleConfirmBulkAction = () => {
+    if (!gameData?.achievements || !pendingBulkAction) return
 
-    gameData?.achievements.forEach(achievement => {
-      if (!achievement.isProtected && achievement.isAchieved) {
-        handleAchievementToggle(achievement.id, false)
+    const targetUnlocked = pendingBulkAction === 'unlock'
+    const next = new Map(modifiedAchievements)
+    let changed = 0
+
+    gameData.achievements.forEach(achievement => {
+      if (achievement.isProtected) return
+
+      const currentValue = next.has(achievement.id)
+        ? next.get(achievement.id)!
+        : achievement.isAchieved
+
+      if (currentValue === targetUnlocked) return
+
+      if (targetUnlocked === achievement.isAchieved) {
+        next.delete(achievement.id)
+      } else {
+        next.set(achievement.id, targetUnlocked)
       }
+
+      changed++
+    })
+
+    setBulkActionDialogOpen(false)
+    setPendingBulkAction(null)
+
+    if (changed === 0) {
+      toast({
+        title: 'No changes needed',
+        description: 'All eligible achievements already match that state.',
+        variant: 'success'
+      })
+      return
+    }
+
+    setModifiedAchievements(next)
+    toast({
+      title: targetUnlocked ? 'Unlock all staged' : 'Lock all staged',
+      description: 'Changes are staged. Click Save Changes to commit to Steam.',
+      variant: 'success'
     })
   }
 
@@ -584,7 +638,7 @@ export default function ManagerView() {
             <DialogTrigger asChild>
               <Button variant="outline">Reset Stats</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="rounded-xl border border-white/10 bg-white/5 shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
               <DialogHeader>
                 <DialogTitle>Reset Statistics</DialogTitle>
                 <DialogDescription>
@@ -614,6 +668,48 @@ export default function ManagerView() {
                   disabled={resetMutation.isPending}
                 >
                   {resetMutation.isPending ? 'Resetting...' : 'Reset'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog
+            open={bulkActionDialogOpen}
+            onOpenChange={(open) => {
+              setBulkActionDialogOpen(open)
+              if (!open) {
+                setPendingBulkAction(null)
+              }
+            }}
+          >
+            <DialogContent className="rounded-xl border border-white/10 bg-white/5 shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+              <DialogHeader>
+                <DialogTitle>
+                  {pendingBulkAction === 'unlock'
+                    ? 'Unlock all achievements?'
+                    : 'Lock all achievements?'}
+                </DialogTitle>
+                <DialogDescription>
+                  {pendingBulkAction === 'unlock'
+                    ? 'Confirming will stage all non-protected achievements as unlocked.'
+                    : 'Confirming will stage all non-protected achievements as locked.'}
+                </DialogDescription>
+              </DialogHeader>
+
+              <p className="text-sm text-muted-foreground">
+                This does not commit to Steam immediately. Click <strong>Save Changes</strong> after
+                confirming to apply everything.
+              </p>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setBulkActionDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant={pendingBulkAction === 'lock' ? 'destructive' : 'default'}
+                  onClick={handleConfirmBulkAction}
+                >
+                  {pendingBulkAction === 'unlock' ? 'Stage Unlock All' : 'Stage Lock All'}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -660,11 +756,11 @@ export default function ManagerView() {
             </h3>
             {(gameData?.achievements.length ?? 0) > 0 && (
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={handleUnlockAll}>
+                <Button variant="outline" size="sm" onClick={() => openBulkActionDialog('unlock')}>
                   <Unlock className="h-3 w-3 mr-1" />
                   Unlock All
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleLockAll}>
+                <Button variant="outline" size="sm" onClick={() => openBulkActionDialog('lock')}>
                   <Lock className="h-3 w-3 mr-1" />
                   Lock All
                 </Button>
@@ -744,7 +840,7 @@ export default function ManagerView() {
 
         {/* Stats Section */}
         <div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
+          <div className="mb-4 space-y-2">
             <h3 className="text-lg font-semibold whitespace-nowrap">
               Stats ({gameData?.stats.length || 0})
               {modifiedStats.size > 0 && (
@@ -753,6 +849,24 @@ export default function ManagerView() {
                 </span>
               )}
             </h3>
+            {(gameData?.stats.length ?? 0) > 0 && (
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground/70 z-10 pointer-events-none" />
+                <Input
+                  type="text"
+                  placeholder="Search by stat name or ID..."
+                  className="pl-10 h-9 text-sm"
+                  value={statSearchQuery}
+                  onChange={(e) => setStatSearchQuery(e.target.value)}
+                  aria-label="Search stats"
+                />
+              </div>
+            )}
+            {statSearchQuery.trim() && (
+              <p className="text-xs text-muted-foreground/80">
+                Showing {filteredStats.length} of {gameData?.stats.length || 0} stats
+              </p>
+            )}
           </div>
 
           {(gameData?.stats.length ?? 0) === 0 ? (
@@ -761,6 +875,14 @@ export default function ManagerView() {
               <p className="text-sm font-medium text-white mb-1">No statistics</p>
               <p className="text-xs text-muted-foreground/70">
                 This game doesn't have any statistics to manage.
+              </p>
+            </div>
+          ) : filteredStats.length === 0 ? (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+              <Search className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
+              <p className="text-sm font-medium text-white mb-1">No matches</p>
+              <p className="text-xs text-muted-foreground/70">
+                No stats match "{statSearchQuery.trim()}"
               </p>
             </div>
           ) : (
@@ -968,6 +1090,9 @@ function StatItem({
   onUpdate: (id: string, value: number) => void
 }) {
   const currentValue = isModified ? modifiedStats.get(stat.id)! : stat.value
+  const displayName = stat.displayName?.trim() || stat.id
+  const isUnnamed =
+    displayName.toLowerCase() === stat.id.toLowerCase() || /^stat_\d+$/i.test(displayName)
   const inputValue =
     statInputs.get(stat.id) ??
     (isModified ? modifiedStats.get(stat.id)!.toString() : stat.value.toString())
@@ -1017,8 +1142,13 @@ function StatItem({
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2 flex-wrap">
           <p className={cn('font-medium', stat.isProtected && 'text-red-400')}>
-            {stat.displayName}
+            {displayName}
           </p>
+          {isUnnamed && (
+            <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-md">
+              Unnamed
+            </span>
+          )}
           {stat.isProtected && (
             <span className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-md">
               Protected
@@ -1031,6 +1161,13 @@ function StatItem({
           )}
         </div>
         <span className="text-xs text-muted-foreground">Type: {stat.type}</span>
+      </div>
+
+      <div className="flex items-center justify-between text-xs text-muted-foreground/70 mb-2 gap-2">
+        <span className="truncate" title={stat.id}>
+          ID: {stat.id}
+        </span>
+        {isModified && <span>Original: {originalValue}</span>}
       </div>
 
       <Input

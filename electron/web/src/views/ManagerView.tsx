@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useDeferredValue, useCallback, memo } from 'react'
 import type React from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useUnsavedChanges } from '@/contexts/UnsavedChangesContext'
 import {
   useGameData,
   useUpdateAchievements,
@@ -74,7 +75,6 @@ export default function ManagerView() {
   const [statInputs, setStatInputs] = useState<Map<string, string>>(new Map())
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
   const [includeAchievements, setIncludeAchievements] = useState(false)
-  const [isReturningToPicker, setIsReturningToPicker] = useState(false)
   const [serviceReady, setServiceReady] = useState(false)
   const [sortOrder, setSortOrder] = useState<'default' | 'unlocked' | 'locked'>('default')
   const [sortKey, setSortKey] = useState(0)
@@ -97,6 +97,15 @@ export default function ManagerView() {
     updateAchievementsMutation.isPending ||
     updateStatsMutation.isPending ||
     storeChangesMutation.isPending
+
+  // Sync unsaved-changes flag to context so Layout's back button can prompt
+  const { setHasUnsavedChanges, isNavigatingBack } = useUnsavedChanges()
+  useEffect(() => {
+    setHasUnsavedChanges(hasChanges)
+  }, [hasChanges, setHasUnsavedChanges])
+  useEffect(() => {
+    return () => setHasUnsavedChanges(false)
+  }, [setHasUnsavedChanges])
 
   // Fast lookup maps used by handlers and derived render data
   const achievementsById = useMemo(
@@ -532,39 +541,8 @@ export default function ManagerView() {
     })
   }
 
-  // Back to picker flow
-  const handleBackToPicker = async () => {
-    setIsReturningToPicker(true)
-
-    try {
-      const bridge = window.electron
-      if (!bridge?.restartServiceNeutral) {
-        navigate('/')
-        return
-      }
-
-      // Restart in neutral mode (no SAM_FORCE_APP_ID)
-      const result = await bridge.restartServiceNeutral()
-
-      // CRITICAL: Update API config before navigation
-      updateAPIConfig({ baseUrl: result.baseUrl, token: result.token })
-
-      navigate('/')
-    } catch (err) {
-      console.error('Failed to restart service:', err)
-      toast({
-        title: 'Warning',
-        description: 'Service restart failed. Navigating to picker anyway.',
-        variant: 'destructive'
-      })
-      navigate('/')
-    } finally {
-      setIsReturningToPicker(false)
-    }
-  }
-
   // Loading overlay
-  const showLoadingOverlay = isSaving || isRefetching || resetMutation.isPending || isReturningToPicker
+  const showLoadingOverlay = isSaving || isRefetching || resetMutation.isPending || isNavigatingBack
 
   // Show fetch error
   if (error) {
@@ -609,7 +587,7 @@ export default function ManagerView() {
               {isSaving && 'Saving changes...'}
               {isRefetching && 'Refreshing data...'}
               {resetMutation.isPending && 'Resetting stats...'}
-              {isReturningToPicker && 'Returning to game picker...'}
+              {isNavigatingBack && 'Returning to game picker...'}
             </p>
           </div>
         </div>
@@ -727,16 +705,6 @@ export default function ManagerView() {
               </TooltipContent>
             </Tooltip>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={handleBackToPicker} disabled={isReturningToPicker} aria-label="Back to game picker">
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Back to game picker</p>
-              </TooltipContent>
-            </Tooltip>
           </TooltipProvider>
         </div>
       </div>

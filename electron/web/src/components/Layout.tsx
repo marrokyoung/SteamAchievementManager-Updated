@@ -96,6 +96,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               style={{ WebkitAppRegion: 'no-drag' } as any}
               onClick={handleBack}
               disabled={isNavigatingBack}
+              aria-label="Back"
             >
               {isNavigatingBack
                 ? <Loader2 className="h-4 w-4 animate-spin" />

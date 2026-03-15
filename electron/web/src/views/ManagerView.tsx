@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useDeferredValue, useCallback, memo } from 'react'
+import { useEffect, useState, useRef, useMemo, useDeferredValue, useCallback, memo } from 'react'
 import type React from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useUnsavedChanges } from '@/contexts/UnsavedChangesContext'
@@ -38,6 +38,12 @@ import {
 import { toast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import {
+  parseStatValue,
+  validateStatValue,
+  clampStatValue,
+  type StatValidation,
+} from '@/lib/statValidation'
+import {
   ArrowLeft,
   RefreshCw,
   Loader2,
@@ -47,7 +53,8 @@ import {
   Trophy,
   BarChart3,
   ArrowUpDown,
-  Search
+  Search,
+  Undo2
 } from 'lucide-react'
 import type { GameData, Achievement, Stat } from '@/types/api'
 
@@ -71,7 +78,7 @@ export default function ManagerView() {
   const [originalData, setOriginalData] = useState<GameData | null>(null)
   const [modifiedAchievements, setModifiedAchievements] = useState<Map<string, boolean>>(new Map())
   const [modifiedStats, setModifiedStats] = useState<Map<string, number>>(new Map())
-  const [validationErrors, setValidationErrors] = useState<Map<string, string>>(new Map())
+  const [statValidations, setStatValidations] = useState<Map<string, StatValidation>>(new Map())
   const [statInputs, setStatInputs] = useState<Map<string, string>>(new Map())
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
   const [includeAchievements, setIncludeAchievements] = useState(false)
@@ -92,7 +99,26 @@ export default function ManagerView() {
 
   // Derived state
   const hasChanges = modifiedAchievements.size > 0 || modifiedStats.size > 0
-  const hasErrors = validationErrors.size > 0
+  const hasErrors = useMemo(() => {
+    for (const v of statValidations.values()) {
+      if (v.severity === 'error') return true
+    }
+    return false
+  }, [statValidations])
+  const warningCount = useMemo(() => {
+    let count = 0
+    for (const v of statValidations.values()) {
+      if (v.severity === 'warning') count++
+    }
+    return count
+  }, [statValidations])
+  const errorCount = useMemo(() => {
+    let count = 0
+    for (const v of statValidations.values()) {
+      if (v.severity === 'error') count++
+    }
+    return count
+  }, [statValidations])
   const isSaving =
     updateAchievementsMutation.isPending ||
     updateStatsMutation.isPending ||
@@ -301,46 +327,29 @@ export default function ManagerView() {
     })
   }, [achievementsById])
 
-  // Stat update handler with validation
+  // Stat update handler with severity-aware validation
   const handleStatUpdate = useCallback((id: string, value: number) => {
     const stat = statsById.get(id)
     const originalStat = originalStatsById.get(id)
     if (!stat) return
 
-    // Protected check
-    if (stat.isProtected) {
-      setValidationErrors(prev => new Map(prev).set(id, 'Protected stat cannot be modified'))
+    const originalValue = originalStat?.value ?? stat.value
+    const validation = validateStatValue({ stat, value, originalValue })
+
+    // Blocking errors: set validation and do NOT stage the value
+    if (validation?.severity === 'error') {
+      setStatValidations(prev => new Map(prev).set(id, validation))
       return
     }
 
-    // Type validation
-    if (stat.type === 'int' && !Number.isInteger(value)) {
-      setValidationErrors(prev => new Map(prev).set(id, 'Value must be an integer'))
-      return
-    }
-
-    // NaN/Infinity check for floats
-    if (stat.type === 'float' && (isNaN(value) || !isFinite(value))) {
-      setValidationErrors(prev => new Map(prev).set(id, 'Invalid float value'))
-      return
-    }
-
-    // Increment-only validation (compare against ORIGINAL value)
-    if (stat.incrementOnly && originalStat && value < originalStat.value) {
-      setValidationErrors(prev =>
-        new Map(prev).set(id, `Cannot decrease below ${originalStat.value}`)
-      )
-      return
-    }
-
-    // Min/max warning (backend will clamp, but show warning)
-    if (value < stat.minValue || value > stat.maxValue) {
-      setValidationErrors(prev =>
-        new Map(prev).set(id, `Value will be clamped to [${stat.minValue}, ${stat.maxValue}]`)
-      )
+    // Warnings (out-of-range): clamp client-side, keep warning visible
+    let stagedValue = value
+    if (validation?.severity === 'warning') {
+      stagedValue = clampStatValue(value, stat)
+      setStatValidations(prev => new Map(prev).set(id, validation))
     } else {
-      // Clear validation error
-      setValidationErrors(prev => {
+      // Clear any previous validation for this stat
+      setStatValidations(prev => {
         const next = new Map(prev)
         next.delete(id)
         return next
@@ -348,19 +357,54 @@ export default function ManagerView() {
     }
 
     // Update modified stats
+    const isUnchanged = stagedValue === stat.value
     setModifiedStats(prev => {
       const next = new Map(prev)
-
-      // If returning to CURRENT value, remove from modified map
-      if (value === stat.value) {
+      if (isUnchanged) {
         next.delete(id)
       } else {
-        next.set(id, value)
+        next.set(id, stagedValue)
       }
-
       return next
     })
+
+    // If clamping brought value back to current, clear the warning too
+    if (isUnchanged && validation?.severity === 'warning') {
+      setStatValidations(prev => {
+        const next = new Map(prev)
+        next.delete(id)
+        return next
+      })
+    }
   }, [statsById, originalStatsById])
+
+  // Revert a single stat to its current (server) value
+  const handleStatRevert = useCallback((id: string) => {
+    setModifiedStats(prev => {
+      const next = new Map(prev)
+      next.delete(id)
+      return next
+    })
+    setStatValidations(prev => {
+      const next = new Map(prev)
+      next.delete(id)
+      return next
+    })
+    setStatInputs(prev => {
+      const next = new Map(prev)
+      next.delete(id)
+      return next
+    })
+  }, [])
+
+  // Clear only the validation for a stat (preserves staged value)
+  const handleClearStatValidation = useCallback((id: string) => {
+    setStatValidations(prev => {
+      const next = new Map(prev)
+      next.delete(id)
+      return next
+    })
+  }, [])
 
   // Render-heavy list JSX is memoized so typing in search doesn't remap unchanged lists
   const achievementItems = useMemo(() => {
@@ -389,7 +433,7 @@ export default function ManagerView() {
     return filteredStats.map(stat => {
       const originalStat = originalStatsById.get(stat.id)
       const isModified = modifiedStats.has(stat.id)
-      const validationError = validationErrors.get(stat.id)
+      const validation = statValidations.get(stat.id)
 
       return (
         <StatItem
@@ -397,11 +441,13 @@ export default function ManagerView() {
           stat={stat}
           originalValue={originalStat?.value ?? stat.value}
           isModified={isModified}
-          validationError={validationError}
+          validation={validation}
           modifiedStats={modifiedStats}
           statInputs={statInputs}
           setStatInputs={setStatInputs}
           onUpdate={handleStatUpdate}
+          onRevert={handleStatRevert}
+          onClearValidation={handleClearStatValidation}
         />
       )
     })
@@ -409,10 +455,12 @@ export default function ManagerView() {
     filteredStats,
     originalStatsById,
     modifiedStats,
-    validationErrors,
+    statValidations,
     statInputs,
     setStatInputs,
-    handleStatUpdate
+    handleStatUpdate,
+    handleStatRevert,
+    handleClearStatValidation
   ])
 
   // Save flow
@@ -443,7 +491,7 @@ export default function ManagerView() {
       // Step 4: Clear local state
       setModifiedAchievements(new Map())
       setModifiedStats(new Map())
-      setValidationErrors(new Map())
+      setStatValidations(new Map())
       setStatInputs(new Map())
 
       // Step 5: Show success toast
@@ -469,7 +517,7 @@ export default function ManagerView() {
       // Clear local state immediately
       setModifiedAchievements(new Map())
       setModifiedStats(new Map())
-      setValidationErrors(new Map())
+      setStatValidations(new Map())
       setStatInputs(new Map())
 
       toast({
@@ -809,11 +857,21 @@ export default function ManagerView() {
         {/* Stats Section */}
         <div>
           <div className="mb-4 space-y-2">
-            <h3 className="text-lg font-semibold whitespace-nowrap">
-              Stats ({gameData?.stats.length || 0})
+            <h3 className="text-lg font-semibold flex items-center gap-2 flex-wrap">
+              <span className="whitespace-nowrap">Stats ({gameData?.stats.length || 0})</span>
               {modifiedStats.size > 0 && (
-                <span className="text-sm text-primary ml-2">
-                  ({modifiedStats.size} modified)
+                <span className="text-xs bg-primary/15 text-primary border border-primary/30 px-2 py-0.5 rounded-md">
+                  {modifiedStats.size} modified
+                </span>
+              )}
+              {warningCount > 0 && (
+                <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-md">
+                  {warningCount} {warningCount === 1 ? 'warning' : 'warnings'}
+                </span>
+              )}
+              {errorCount > 0 && (
+                <span className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-md">
+                  {errorCount} {errorCount === 1 ? 'error' : 'errors'}
                 </span>
               )}
             </h3>
@@ -1042,22 +1100,30 @@ function StatItem({
   stat,
   originalValue,
   isModified,
-  validationError,
+  validation,
   modifiedStats,
   statInputs,
   setStatInputs,
-  onUpdate
+  onUpdate,
+  onRevert,
+  onClearValidation
 }: {
   stat: Stat
   originalValue: number
   isModified: boolean
-  validationError?: string
+  validation?: StatValidation
   modifiedStats: Map<string, number>
   statInputs: Map<string, string>
   setStatInputs: React.Dispatch<React.SetStateAction<Map<string, string>>>
   onUpdate: (id: string, value: number) => void
+  onRevert: (id: string) => void
+  onClearValidation: (id: string) => void
 }) {
-  const currentValue = isModified ? modifiedStats.get(stat.id)! : stat.value
+  // Keyboard handlers (Enter/Escape) fully handle commit/revert, but
+  // blur() fires synchronously afterward and would re-run commitInput
+  // with stale closure state. This ref skips the redundant blur commit.
+  const skipNextBlurCommitRef = useRef(false)
+
   const displayName = stat.displayName?.trim() || stat.id
   const isUnnamed =
     displayName.toLowerCase() === stat.id.toLowerCase() || /^stat_\d+$/i.test(displayName)
@@ -1065,15 +1131,34 @@ function StatItem({
     statInputs.get(stat.id) ??
     (isModified ? modifiedStats.get(stat.id)!.toString() : stat.value.toString())
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setStatInputs(prev => new Map(prev).set(stat.id, e.target.value))
-  }
+  const commitInput = () => {
+    if (skipNextBlurCommitRef.current) {
+      skipNextBlurCommitRef.current = false
+      return
+    }
 
-  const handleBlur = () => {
-    const text = statInputs.get(stat.id) ?? currentValue.toString()
-    const parsed = stat.type === 'int' ? parseInt(text, 10) : parseFloat(text)
+    const text = statInputs.get(stat.id)
 
-    if (isNaN(parsed)) {
+    if (text === undefined) {
+      // Nothing typed — clear stale validations:
+      // - Errors are about rejected edits → always stale once input is idle.
+      // - Warnings on unmodified stats → stale (nothing staged).
+      // - Warnings on modified stats → keep (describes the staged clamped value).
+      if (validation?.severity === 'error') {
+        if (isModified) {
+          onClearValidation(stat.id)
+        } else {
+          onRevert(stat.id)
+        }
+      } else if (validation && !isModified) {
+        onRevert(stat.id)
+      }
+      return
+    }
+
+    const parsed = parseStatValue(text, stat.type)
+
+    if (parsed === null) {
       // Invalid input: revert to current value
       setStatInputs(prev => {
         const next = new Map(prev)
@@ -1092,6 +1177,38 @@ function StatItem({
     })
   }
 
+  const revertInput = () => {
+    // Discard in-flight text, restore displayed value
+    setStatInputs(prev => {
+      const next = new Map(prev)
+      next.delete(stat.id)
+      return next
+    })
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setStatInputs(prev => new Map(prev).set(stat.id, e.target.value))
+  }
+
+  const handleBlur = () => commitInput()
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      commitInput()
+      skipNextBlurCommitRef.current = true
+      e.currentTarget.blur()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      skipNextBlurCommitRef.current = true
+      revertInput()
+      e.currentTarget.blur()
+    }
+  }
+
+  const isError = validation?.severity === 'error'
+  const isWarning = validation?.severity === 'warning'
+
   return (
     <div
       className={cn(
@@ -1104,7 +1221,9 @@ function StatItem({
         isModified && 'border-primary/50 shadow-[0_0_20px_rgba(168,85,247,0.25)]',
         isModified && 'bg-gradient-to-br from-[#2b1a4a] via-[#1b1235] to-[#120b24]',
         // Validation error: red glow
-        validationError && 'border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.2)]'
+        isError && 'border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.2)]',
+        // Validation warning: amber glow
+        isWarning && !isError && 'border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.15)]'
       )}
     >
       <div className="flex items-center justify-between mb-2">
@@ -1128,7 +1247,28 @@ function StatItem({
             </span>
           )}
         </div>
-        <span className="text-xs text-muted-foreground">Type: {stat.type}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">Type: {stat.type}</span>
+          {isModified && (
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => onRevert(stat.id)}
+                    className="text-muted-foreground hover:text-white transition-colors p-0.5 rounded"
+                    aria-label={`Revert ${displayName}`}
+                  >
+                    <Undo2 className="h-3.5 w-3.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Revert to {stat.value}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center justify-between text-xs text-muted-foreground/70 mb-2 gap-2">
@@ -1140,12 +1280,16 @@ function StatItem({
 
       <Input
         type="text"
+        inputMode={stat.type === 'float' ? 'decimal' : 'numeric'}
         value={inputValue}
         onChange={handleChange}
         onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
         disabled={stat.isProtected}
-        step={stat.type === 'float' ? '0.01' : '1'}
-        className={cn(validationError && 'border-red-500/60')}
+        className={cn(
+          isError && 'border-red-500/60',
+          isWarning && !isError && 'border-amber-500/50'
+        )}
       />
 
       <div className="flex justify-between text-xs text-muted-foreground/70 mt-1">
@@ -1153,8 +1297,13 @@ function StatItem({
         <span>Max: {stat.maxValue}</span>
       </div>
 
-      {validationError && (
-        <p className="text-xs text-red-400 mt-1">{validationError}</p>
+      {validation && (
+        <p className={cn(
+          'text-xs mt-1',
+          isError ? 'text-red-400' : 'text-amber-300'
+        )}>
+          {validation.message}
+        </p>
       )}
     </div>
   )

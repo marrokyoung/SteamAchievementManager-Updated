@@ -67,6 +67,11 @@ function buildAchievementIconUrl(appId: number, iconPath: string | null): string
   return `https://cdn.steamstatic.com/steamcommunity/public/images/apps/${appId}/${iconPath}`
 }
 
+function isRawIdStat(stat: Pick<Stat, 'id' | 'displayName'>): boolean {
+  const displayName = stat.displayName?.trim() || stat.id
+  return displayName.toLowerCase() === stat.id.toLowerCase() || /^stat_\d+$/i.test(displayName)
+}
+
 export default function ManagerView() {
   const { appId } = useParams<{ appId: string }>()
   const navigate = useNavigate()
@@ -87,6 +92,7 @@ export default function ManagerView() {
   const [sortKey, setSortKey] = useState(0)
   const [achievementSearchQuery, setAchievementSearchQuery] = useState('')
   const [statSearchQuery, setStatSearchQuery] = useState('')
+  const [showRawStats, setShowRawStats] = useState(false)
   const [bulkActionDialogOpen, setBulkActionDialogOpen] = useState(false)
   const [pendingBulkAction, setPendingBulkAction] = useState<'unlock' | 'lock' | null>(null)
 
@@ -219,6 +225,16 @@ export default function ManagerView() {
     if (!q) return gameData.stats
     return gameData.stats.filter(stat => statSearchIndex.get(stat.id)?.includes(q))
   }, [gameData?.stats, deferredStatSearchQuery, statSearchIndex])
+
+  const namedStats = useMemo(
+    () => filteredStats.filter(stat => !isRawIdStat(stat)),
+    [filteredStats]
+  )
+  const rawIdStats = useMemo(
+    () => filteredStats.filter(stat => isRawIdStat(stat)),
+    [filteredStats]
+  )
+  const visibleStatsCount = showRawStats ? filteredStats.length : namedStats.length
 
   // Sync originalData on every refetch
   useEffect(() => {
@@ -427,17 +443,14 @@ export default function ManagerView() {
     })
   }, [filteredAchievements, modifiedAchievements, numericAppId, handleAchievementToggle])
 
-  const statItems = useMemo(() => {
-    if (!filteredStats.length) return []
-
-    return filteredStats.map(stat => {
+  const buildStatItem = useCallback((stat: Stat, index: number, group: 'named' | 'raw') => {
       const originalStat = originalStatsById.get(stat.id)
       const isModified = modifiedStats.has(stat.id)
       const validation = statValidations.get(stat.id)
 
       return (
         <StatItem
-          key={stat.id}
+          key={`${group}-${stat.id}-${index}`}
           stat={stat}
           originalValue={originalStat?.value ?? stat.value}
           isModified={isModified}
@@ -450,9 +463,7 @@ export default function ManagerView() {
           onClearValidation={handleClearStatValidation}
         />
       )
-    })
   }, [
-    filteredStats,
     originalStatsById,
     modifiedStats,
     statValidations,
@@ -461,6 +472,19 @@ export default function ManagerView() {
     handleStatUpdate,
     handleStatRevert,
     handleClearStatValidation
+  ])
+
+  const namedStatItems = useMemo(() => {
+    if (!namedStats.length) return []
+    return namedStats.map((stat, index) => buildStatItem(stat, index, 'named'))
+  }, [namedStats, buildStatItem])
+
+  const rawStatItems = useMemo(() => {
+    if (!rawIdStats.length) return []
+    return rawIdStats.map((stat, index) => buildStatItem(stat, index, 'raw'))
+  }, [
+    rawIdStats,
+    buildStatItem
   ])
 
   // Save flow
@@ -888,9 +912,23 @@ export default function ManagerView() {
                 />
               </div>
             )}
+            {(gameData?.stats.length ?? 0) > 0 && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant={showRawStats ? 'secondary' : 'outline'}
+                  size="sm"
+                  onClick={() => setShowRawStats(prev => !prev)}
+                >
+                  {showRawStats ? 'Hide Raw Stats' : 'Show Raw Stats (Advanced)'}
+                </Button>
+                <span className="text-xs text-muted-foreground/80">
+                  {namedStats.length} named, {rawIdStats.length} raw ID
+                </span>
+              </div>
+            )}
             {statSearchQuery.trim() && (
               <p className="text-xs text-muted-foreground/80">
-                Showing {filteredStats.length} of {gameData?.stats.length || 0} stats
+                Showing {visibleStatsCount} of {gameData?.stats.length || 0} stats
               </p>
             )}
           </div>
@@ -912,8 +950,47 @@ export default function ManagerView() {
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {statItems}
+            <div className="space-y-3">
+              {namedStatItems.length > 0 && (
+                <div className="space-y-2">
+                  {namedStatItems}
+                </div>
+              )}
+
+              {!showRawStats && rawIdStats.length > 0 && namedStatItems.length === 0 && (
+                <div className="rounded-xl border border-white/10 bg-white/5 p-5 text-center shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+                  <p className="text-sm font-medium text-white mb-1">Raw ID stats hidden</p>
+                  <p className="text-xs text-muted-foreground/70">
+                    {rawIdStats.length} matching stats only expose internal IDs. Enable
+                    {' '}<strong>Show Raw Stats (Advanced)</strong>{' '}
+                    to inspect them.
+                  </p>
+                </div>
+              )}
+
+              {showRawStats && rawStatItems.length > 0 && (
+                <details className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+                  <summary className="cursor-pointer select-none text-sm font-medium text-amber-200">
+                    Raw ID Stats ({rawStatItems.length})
+                  </summary>
+                  <p className="text-xs text-amber-100/80 mt-2 mb-3">
+                    Game schema has no display name for these stats. Internal IDs are shown as-is.
+                  </p>
+                  <div className="space-y-2">
+                    {rawStatItems}
+                  </div>
+                </details>
+              )}
+
+              {!showRawStats && namedStatItems.length === 0 && rawIdStats.length === 0 && (
+                <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+                  <Search className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
+                  <p className="text-sm font-medium text-white mb-1">No matches</p>
+                  <p className="text-xs text-muted-foreground/70">
+                    No named stats match "{statSearchQuery.trim()}"
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1125,8 +1202,7 @@ function StatItem({
   const skipNextBlurCommitRef = useRef(false)
 
   const displayName = stat.displayName?.trim() || stat.id
-  const isUnnamed =
-    displayName.toLowerCase() === stat.id.toLowerCase() || /^stat_\d+$/i.test(displayName)
+  const isRawId = isRawIdStat(stat)
   const inputValue =
     statInputs.get(stat.id) ??
     (isModified ? modifiedStats.get(stat.id)!.toString() : stat.value.toString())
@@ -1231,9 +1307,12 @@ function StatItem({
           <p className={cn('font-medium', stat.isProtected && 'text-red-400')}>
             {displayName}
           </p>
-          {isUnnamed && (
-            <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-md">
-              Unnamed
+          {isRawId && (
+            <span
+              className="text-xs bg-amber-500/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-md"
+              title="Game schema has no display name; showing internal ID."
+            >
+              Raw ID
             </span>
           )}
           {stat.isProtected && (
@@ -1243,7 +1322,7 @@ function StatItem({
           )}
           {stat.incrementOnly && (
             <span className="text-xs bg-primary/15 text-primary border border-primary/30 px-2 py-0.5 rounded-md">
-              Increment Only
+              Only Increases
             </span>
           )}
         </div>
@@ -1296,6 +1375,12 @@ function StatItem({
         <span>Min: {stat.minValue}</span>
         <span>Max: {stat.maxValue}</span>
       </div>
+
+      {stat.incrementOnly && (
+        <p className="text-xs text-primary/85 mt-1">
+          Must be &gt;= current value ({originalValue}).
+        </p>
+      )}
 
       {validation && (
         <p className={cn(

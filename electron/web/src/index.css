@@ -47,8 +47,165 @@
   --radius: 0.75rem;
 }
 
-* {
-  border-color: hsl(var(--color-border));
+@layer base {
+  * {
+    border-color: hsl(var(--color-border));
+  }
+}
+
+/* ── Scrollbar tokens ── */
+:root {
+  --scrollbar-size: 8px;
+  --scrollbar-track: rgba(255, 255, 255, 0.06);
+  --scrollbar-thumb: rgba(168, 130, 255, 0.35);
+  --scrollbar-thumb-hover: rgba(168, 130, 255, 0.55);
+  --scrollbar-thumb-active: rgba(168, 130, 255, 0.7);
+  --scrollbar-radius: 9999px;
+}
+
+/* ── Pill scrollbar – Chromium ── */
+.sam-scrollbar::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+.sam-scrollbar::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: var(--scrollbar-radius);
+}
+.sam-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--scrollbar-radius);
+}
+.sam-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+.sam-scrollbar::-webkit-scrollbar-thumb:active {
+  background: var(--scrollbar-thumb-active);
+}
+
+/* ── Pill scrollbar – Firefox ── */
+.sam-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* ── Shared surface tokens ── */
+:root {
+  /* Popup / overlay surface */
+  --surface-popup-bg: rgba(11, 9, 22, 0.95);
+  --surface-popup-border: rgba(255, 255, 255, 0.15);
+  --surface-popup-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+
+  /* Glass panel surface */
+  --surface-glass-bg: rgba(255, 255, 255, 0.05);
+  --surface-glass-border: rgba(255, 255, 255, 0.1);
+  --surface-glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+
+  /* Row card surface */
+  --surface-row-from: #221239;
+  --surface-row-via: #140d26;
+  --surface-row-to: #0c0818;
+  --surface-row-border: rgba(255, 255, 255, 0.1);
+  --surface-row-shadow: 0 10px 35px rgba(0, 0, 0, 0.4);
+
+  /* Row card modified state */
+  --surface-row-mod-from: #2b1a4a;
+  --surface-row-mod-via: #1b1235;
+  --surface-row-mod-to: #120b24;
+
+  /* Accent tokens */
+  --accent-glow: rgba(168, 85, 247, 0.25);
+  --accent-glow-shadow: 0 0 20px rgba(168, 85, 247, 0.25);
+  --accent-focus-ring: rgba(140, 97, 255, 0.65);
+  --accent-hover-shadow: 0 12px 32px rgba(120, 60, 255, 0.45);
+
+  /* Button gradients */
+  --btn-primary-from: #7c3aed;
+  --btn-primary-via: #8b5cf6;
+  --btn-primary-to: #6366f1;
+}
+
+/* ── Shared surface utilities ── */
+/* Placed in @layer components so Tailwind utilities can override them */
+@layer components {
+  /* Glass panel – dialogs, search bars, empty states */
+  .sam-glass-panel {
+    border: 1px solid var(--surface-glass-border);
+    background: var(--surface-glass-bg);
+    box-shadow: var(--surface-glass-shadow);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+  }
+
+  /* Popup surface – dropdowns, tooltips */
+  .sam-popup-surface {
+    border: 1px solid var(--surface-popup-border);
+    background: var(--surface-popup-bg);
+    box-shadow: var(--surface-popup-shadow);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+  }
+
+  /* Row card – achievement & stat rows */
+  .sam-row-card {
+    border-radius: 0.75rem;
+    border: 1px solid var(--surface-row-border);
+    background: linear-gradient(to bottom right, var(--surface-row-from), var(--surface-row-via), var(--surface-row-to));
+    box-shadow: var(--surface-row-shadow);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  }
+  .sam-row-card.sam-row-modified {
+    border-color: hsl(270 70% 64% / 0.5);
+    box-shadow: var(--accent-glow-shadow);
+    background: linear-gradient(to bottom right, var(--surface-row-mod-from), var(--surface-row-mod-via), var(--surface-row-mod-to));
+  }
+
+  /* Status badge base */
+  .sam-badge {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.375rem;
+    border-width: 1px;
+    flex-shrink: 0;
+  }
+  .sam-badge-modified {
+    background: hsl(270 70% 64% / 0.15);
+    color: hsl(270 70% 64%);
+    border-color: hsl(270 70% 64% / 0.3);
+  }
+  .sam-badge-warning {
+    background: rgba(245, 158, 11, 0.2);
+    color: rgb(252, 211, 77);
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+  .sam-badge-error {
+    background: rgba(239, 68, 68, 0.2);
+    color: rgb(248, 113, 113);
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+  .sam-badge-protected {
+    background: rgba(239, 68, 68, 0.2);
+    color: rgb(248, 113, 113);
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+  .sam-badge-raw-id {
+    background: rgba(245, 158, 11, 0.2);
+    color: rgb(252, 211, 77);
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+  .sam-badge-neutral {
+    background: rgba(255, 255, 255, 0.05);
+    color: hsl(216 14% 80%);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  .sam-badge-accent {
+    background: hsl(270 70% 64% / 0.15);
+    color: hsl(270 70% 64%);
+    border-color: hsl(270 70% 64% / 0.3);
+  }
 }
 
 body {

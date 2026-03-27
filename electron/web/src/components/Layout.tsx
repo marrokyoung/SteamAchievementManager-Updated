@@ -141,7 +141,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Unsaved changes confirmation */}
       <Dialog open={showLeaveDialog} onOpenChange={setShowLeaveDialog}>
-        <DialogContent className="rounded-xl border border-white/10 bg-white/5 shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+        <DialogContent className="sam-glass-panel">
           <DialogHeader>
             <DialogTitle>Unsaved Changes</DialogTitle>
             <DialogDescription>
@@ -160,7 +160,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </Dialog>
 
       {/* Main Content */}
-      <main className="relative z-10 flex-1 overflow-auto">
+      <main className="relative z-10 flex-1 overflow-auto sam-scrollbar">
         {children}
       </main>
     </div>

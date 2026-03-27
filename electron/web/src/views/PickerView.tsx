@@ -154,7 +154,7 @@ export default function PickerView() {
       </div>
 
       {/* Search and filter controls */}
-      <div className="mb-8 rounded-2xl border border-white/10 bg-white/5 p-5 shadow-[0_20px_70px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+      <div className="mb-8 rounded-2xl sam-glass-panel p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/70" />
@@ -246,7 +246,7 @@ export default function PickerView() {
           {[...Array(15)].map((_, i) => (
             <div
               key={i}
-              className="h-44 rounded-xl border border-white/10 bg-white/5 shadow-[0_15px_45px_rgba(0,0,0,0.45)] animate-pulse"
+              className="h-44 rounded-xl sam-glass-panel animate-pulse"
             />
           ))}
         </div>
@@ -265,7 +265,7 @@ export default function PickerView() {
 
       {/* Empty state */}
       {!isLoading && filteredGames.length === 0 && (
-        <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-12 text-center shadow-[0_18px_55px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+        <div className="mt-6 rounded-2xl sam-glass-panel p-12 text-center">
           <Gamepad2 className="h-16 w-16 text-muted-foreground/70 mx-auto mb-4" />
           <p className="text-lg font-semibold text-white mb-2">No games found</p>
           <p className="text-sm text-muted-foreground/80">
@@ -385,21 +385,18 @@ function GameCard({
       onClick={() => onClick(game.id)}
       disabled={isInitializing}
       className={cn(
-        'group relative aspect-[460/215] overflow-hidden rounded-xl border transition-all duration-200',
-        'bg-white/5 border-white/10 shadow-[0_15px_45px_rgba(0,0,0,0.45)] hover:-translate-y-1',
-        'hover:shadow-[0_20px_55px_rgba(124,58,237,0.35)]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(140,97,255,0.65)] focus-visible:ring-offset-0',
-        'disabled:opacity-50 disabled:cursor-not-allowed',
-        game.owned
-          ? 'border-primary/35 hover:border-primary/70'
-          : 'border-yellow-400/40 hover:border-yellow-400/70'
+        'group relative aspect-[460/215] overflow-hidden rounded-xl border border-transparent transition-all duration-200',
+        'bg-white/5 shadow-[0_15px_45px_rgba(0,0,0,0.45)] hover:-translate-y-1',
+        'hover:shadow-[var(--accent-hover-shadow)]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-focus-ring)] focus-visible:ring-offset-0',
+        'disabled:opacity-50 disabled:cursor-not-allowed'
       )}
     >
       {/* Image with placeholder behind - placeholder visible until image loads */}
       <div className="relative w-full h-full">
         {/* Placeholder always rendered behind */}
         <div className={cn(
-          "absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[#221239] via-[#140d26] to-[#0c0818] transition-opacity duration-300",
+          "absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[var(--surface-row-from)] via-[var(--surface-row-via)] to-[var(--surface-row-to)] transition-opacity duration-300",
           imageLoaded && hasArt ? "opacity-0" : "opacity-100"
         )}>
           <Gamepad2 className="h-16 w-16 text-muted-foreground/40" />

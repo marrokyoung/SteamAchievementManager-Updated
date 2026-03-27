@@ -688,7 +688,7 @@ export default function ManagerView() {
             <DialogTrigger asChild>
               <Button variant="outline">Reset Stats</Button>
             </DialogTrigger>
-            <DialogContent className="rounded-xl border border-white/10 bg-white/5 shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+            <DialogContent className="sam-glass-panel">
               <DialogHeader>
                 <DialogTitle>Reset Statistics</DialogTitle>
                 <DialogDescription>
@@ -732,7 +732,7 @@ export default function ManagerView() {
               }
             }}
           >
-            <DialogContent className="rounded-xl border border-white/10 bg-white/5 shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+            <DialogContent className="sam-glass-panel">
               <DialogHeader>
                 <DialogTitle>
                   {pendingBulkAction === 'unlock'
@@ -854,7 +854,7 @@ export default function ManagerView() {
           </div>
 
           {(gameData?.achievements.length ?? 0) === 0 ? (
-            <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+            <div className="rounded-xl sam-glass-panel p-8 text-center">
               <Trophy className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
               <p className="text-sm font-medium text-white mb-1">No achievements</p>
               <p className="text-xs text-muted-foreground/70">
@@ -862,7 +862,7 @@ export default function ManagerView() {
               </p>
             </div>
           ) : filteredAchievements.length === 0 ? (
-            <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+            <div className="rounded-xl sam-glass-panel p-8 text-center">
               <Search className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
               <p className="text-sm font-medium text-white mb-1">No matches</p>
               <p className="text-xs text-muted-foreground/70">
@@ -884,17 +884,17 @@ export default function ManagerView() {
             <h3 className="text-lg font-semibold flex items-center gap-2 flex-wrap">
               <span className="whitespace-nowrap">Stats ({gameData?.stats.length || 0})</span>
               {modifiedStats.size > 0 && (
-                <span className="text-xs bg-primary/15 text-primary border border-primary/30 px-2 py-0.5 rounded-md">
+                <span className="sam-badge sam-badge-modified">
                   {modifiedStats.size} modified
                 </span>
               )}
               {warningCount > 0 && (
-                <span className="text-xs bg-amber-500/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-md">
+                <span className="sam-badge sam-badge-warning">
                   {warningCount} {warningCount === 1 ? 'warning' : 'warnings'}
                 </span>
               )}
               {errorCount > 0 && (
-                <span className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-md">
+                <span className="sam-badge sam-badge-error">
                   {errorCount} {errorCount === 1 ? 'error' : 'errors'}
                 </span>
               )}
@@ -934,7 +934,7 @@ export default function ManagerView() {
           </div>
 
           {(gameData?.stats.length ?? 0) === 0 ? (
-            <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+            <div className="rounded-xl sam-glass-panel p-8 text-center">
               <BarChart3 className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
               <p className="text-sm font-medium text-white mb-1">No statistics</p>
               <p className="text-xs text-muted-foreground/70">
@@ -942,7 +942,7 @@ export default function ManagerView() {
               </p>
             </div>
           ) : filteredStats.length === 0 ? (
-            <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+            <div className="rounded-xl sam-glass-panel p-8 text-center">
               <Search className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
               <p className="text-sm font-medium text-white mb-1">No matches</p>
               <p className="text-xs text-muted-foreground/70">
@@ -958,7 +958,7 @@ export default function ManagerView() {
               )}
 
               {!showRawStats && rawIdStats.length > 0 && namedStatItems.length === 0 && (
-                <div className="rounded-xl border border-white/10 bg-white/5 p-5 text-center shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+                <div className="rounded-xl sam-glass-panel p-5 text-center">
                   <p className="text-sm font-medium text-white mb-1">Raw ID stats hidden</p>
                   <p className="text-xs text-muted-foreground/70">
                     {rawIdStats.length} matching stats only expose internal IDs. Enable
@@ -983,7 +983,7 @@ export default function ManagerView() {
               )}
 
               {!showRawStats && namedStatItems.length === 0 && rawIdStats.length === 0 && (
-                <div className="rounded-xl border border-white/10 bg-white/5 p-8 text-center shadow-[0_12px_40px_rgba(0,0,0,0.4)] backdrop-blur-xl">
+                <div className="rounded-xl sam-glass-panel p-8 text-center">
                   <Search className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
                   <p className="text-sm font-medium text-white mb-1">No matches</p>
                   <p className="text-xs text-muted-foreground/70">
@@ -1102,14 +1102,9 @@ const AchievementItem = memo(function AchievementItem({
   return (
     <div
       className={cn(
-        'p-4 rounded-xl border transition-all duration-200 flex items-center gap-3',
-        'bg-gradient-to-br from-[#221239] via-[#140d26] to-[#0c0818]',
-        'border-white/10 shadow-[0_10px_35px_rgba(0,0,0,0.4)]',
-        'backdrop-blur-sm',
+        'p-4 sam-row-card flex items-center gap-3',
         'focus-visible:ring-2 focus-visible:ring-primary/50',
-        // Modified state: purple accent
-        isModified && 'border-primary/50 shadow-[0_0_20px_rgba(168,85,247,0.25)]',
-        isModified && 'bg-gradient-to-br from-[#2b1a4a] via-[#1b1235] to-[#120b24]'
+        isModified && 'sam-row-modified'
       )}
     >
       {/* Achievement Icon */}
@@ -1132,12 +1127,12 @@ const AchievementItem = memo(function AchievementItem({
             {achievement.name}
           </p>
           {achievement.isProtected && (
-            <span className="shrink-0 text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-md">
+            <span className="sam-badge sam-badge-protected">
               Protected
             </span>
           )}
           {achievement.isHidden && (
-            <span className="shrink-0 text-xs bg-white/5 text-muted-foreground border border-white/10 px-2 py-0.5 rounded-md">
+            <span className="sam-badge sam-badge-neutral">
               Hidden
             </span>
           )}
@@ -1288,17 +1283,10 @@ function StatItem({
   return (
     <div
       className={cn(
-        'p-4 rounded-xl border transition-all duration-200',
-        'bg-gradient-to-br from-[#221239] via-[#140d26] to-[#0c0818]',
-        'border-white/10 shadow-[0_10px_35px_rgba(0,0,0,0.4)]',
-        'backdrop-blur-sm',
+        'p-4 sam-row-card',
         'focus-within:ring-2 focus-within:ring-primary/50',
-        // Modified state: purple accent
-        isModified && 'border-primary/50 shadow-[0_0_20px_rgba(168,85,247,0.25)]',
-        isModified && 'bg-gradient-to-br from-[#2b1a4a] via-[#1b1235] to-[#120b24]',
-        // Validation error: red glow
+        isModified && 'sam-row-modified',
         isError && 'border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.2)]',
-        // Validation warning: amber glow
         isWarning && !isError && 'border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.15)]'
       )}
     >
@@ -1309,19 +1297,19 @@ function StatItem({
           </p>
           {isRawId && (
             <span
-              className="text-xs bg-amber-500/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-md"
+              className="sam-badge sam-badge-raw-id"
               title="Game schema has no display name; showing internal ID."
             >
               Raw ID
             </span>
           )}
           {stat.isProtected && (
-            <span className="text-xs bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-md">
+            <span className="sam-badge sam-badge-protected">
               Protected
             </span>
           )}
           {stat.incrementOnly && (
-            <span className="text-xs bg-primary/15 text-primary border border-primary/30 px-2 py-0.5 rounded-md">
+            <span className="sam-badge sam-badge-accent">
               Only Increases
             </span>
           )}

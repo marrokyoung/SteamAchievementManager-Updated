@@ -32,8 +32,7 @@ const DropdownMenuSubContent = React.forwardRef<
   <DropdownMenuPrimitive.SubContent
     ref={ref}
     className={cn(
-      // Explicit hsl(var()) keeps the surface opaque even though our CSS variables are stored as raw channel values.
-      'z-50 min-w-[8rem] overflow-hidden rounded-xl border border-white/15 bg-[#0b0916]/95 p-1 text-[hsl(var(--color-popover-foreground))] shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+      'z-50 min-w-[8rem] max-h-[min(70vh,24rem)] overflow-y-auto sam-scrollbar rounded-xl sam-popup-surface p-1 text-[hsl(var(--color-popover-foreground))] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
       className
     )}
     {...props}
@@ -50,8 +49,7 @@ const DropdownMenuContent = React.forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        // Explicit hsl(var()) keeps the surface opaque even though our CSS variables are stored as raw channel values.
-        'z-50 min-w-[12rem] overflow-hidden rounded-xl border border-white/15 bg-[#0b0916]/95 p-1 text-[hsl(var(--color-popover-foreground))] shadow-[0_20px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
+        'z-50 min-w-[12rem] max-h-[min(70vh,24rem)] overflow-y-auto sam-scrollbar rounded-xl sam-popup-surface p-1 text-[hsl(var(--color-popover-foreground))] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
         className
       )}
       {...props}

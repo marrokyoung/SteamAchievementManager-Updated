@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type React from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useUnsavedChanges } from '@/contexts/UnsavedChangesContext'
 import {
   useGameData,
   useUpdateAchievements,
@@ -8,10 +8,8 @@ import {
   useStoreChanges,
   useResetStats
 } from '@/hooks/useGameQueries'
-import { updateAPIConfig } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
-import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -21,6 +19,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { toast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import {
@@ -28,10 +32,15 @@ import {
   RefreshCw,
   Loader2,
   AlertCircle,
-  Lock,
-  Unlock
 } from 'lucide-react'
-import type { GameData, Achievement, Stat } from '@/types/api'
+import type { GameData } from '@/types/api'
+
+import { useManagerService } from './manager/useManagerService'
+import { useAchievementStaging } from './manager/useAchievementStaging'
+import { useStatEditing } from './manager/useStatEditing'
+import { clearAchievementIconCache } from './manager/components/AchievementIcon'
+import { AchievementsSection } from './manager/components/AchievementsSection'
+import { StatsSection } from './manager/components/StatsSection'
 
 export default function ManagerView() {
   const { appId } = useParams<{ appId: string }>()
@@ -40,16 +49,8 @@ export default function ManagerView() {
   // Guard against missing or invalid appId
   const numericAppId = appId ? Number(appId) : NaN
 
-  // State management
-  const [originalData, setOriginalData] = useState<GameData | null>(null)
-  const [modifiedAchievements, setModifiedAchievements] = useState<Map<string, boolean>>(new Map())
-  const [modifiedStats, setModifiedStats] = useState<Map<string, number>>(new Map())
-  const [validationErrors, setValidationErrors] = useState<Map<string, string>>(new Map())
-  const [statInputs, setStatInputs] = useState<Map<string, string>>(new Map())
-  const [resetDialogOpen, setResetDialogOpen] = useState(false)
-  const [includeAchievements, setIncludeAchievements] = useState(false)
-  const [isReturningToPicker, setIsReturningToPicker] = useState(false)
-  const [serviceReady, setServiceReady] = useState(false)
+  // Service bootstrap
+  const serviceReady = useManagerService(appId, numericAppId)
 
   // Queries and mutations - only enable after service is ready
   const { data: gameData, isLoading, error, refetch, isRefetching } = useGameData(numericAppId, serviceReady)
@@ -58,176 +59,52 @@ export default function ManagerView() {
   const storeChangesMutation = useStoreChanges(numericAppId)
   const resetMutation = useResetStats(numericAppId)
 
-  // Derived state
-  const hasChanges = modifiedAchievements.size > 0 || modifiedStats.size > 0
-  const hasErrors = validationErrors.size > 0
+  // Track original data for stat revert comparisons
+  const [originalData, setOriginalData] = useState<GameData | null>(null)
+
+  // Achievement staging
+  const achievements = useAchievementStaging(gameData)
+
+  // Stat editing
+  const stats = useStatEditing(gameData, originalData)
+
+  // Reset dialog state (owned by route because it triggers cross-cutting reset)
+  const [resetDialogOpen, setResetDialogOpen] = useState(false)
+  const [includeAchievements, setIncludeAchievements] = useState(false)
+
+  // Derived cross-cutting state
+  const hasChanges = achievements.modifiedAchievements.size > 0 || stats.modifiedStats.size > 0
   const isSaving =
     updateAchievementsMutation.isPending ||
     updateStatsMutation.isPending ||
     storeChangesMutation.isPending
+
+  // Sync unsaved-changes flag to context so Layout's back button can prompt
+  const { setHasUnsavedChanges, isNavigatingBack } = useUnsavedChanges()
+  useEffect(() => {
+    setHasUnsavedChanges(hasChanges)
+  }, [hasChanges, setHasUnsavedChanges])
+  useEffect(() => {
+    return () => setHasUnsavedChanges(false)
+  }, [setHasUnsavedChanges])
 
   // Sync originalData on every refetch
   useEffect(() => {
     if (gameData) {
       setOriginalData(gameData)
       // Reset input text to match current values
-      setStatInputs(new Map())
+      stats.setStatInputs(new Map())
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameData])
 
+  // Clear icon cache and staged edits when switching games
   useEffect(() => {
-    if (!appId || isNaN(numericAppId)) {
-      navigate('/')
-      return
-    }
-
-    const ensureServiceInitialized = async () => {
-      try {
-        const bridge = window.electron
-        if (!bridge?.startServiceForApp) {
-          // Browser mode - no service restart needed
-          setServiceReady(true)
-          return
-        }
-
-        // If service already running for this app, reuse current config
-        const current = await bridge.getCurrentAppId?.()
-        if (current && current.appId === numericAppId) {
-          updateAPIConfig({ baseUrl: current.baseUrl, token: current.token })
-          setServiceReady(true)
-          return
-        }
-
-        // Restart service to ensure clean state and correct forced mode
-        const result = await bridge.startServiceForApp(numericAppId)
-
-        // CRITICAL: Update API config with new token before any data fetch
-        updateAPIConfig({ baseUrl: result.baseUrl, token: result.token })
-
-        // Signal that service is ready and queries can fire
-        setServiceReady(true)
-      } catch (err) {
-        const errorMessage = (err as Error).message || ''
-
-        // If restart already in progress, fall back to getConfig to pick up current token
-        if (errorMessage.includes('restart already in progress')) {
-          console.warn('Service restart in progress, using current config')
-          try {
-            const bridge = window.electron
-            if (bridge?.getConfig) {
-              const config = await bridge.getConfig()
-              updateAPIConfig({ baseUrl: config.baseUrl, token: config.token })
-              setServiceReady(true)
-              return
-            }
-          } catch (fallbackErr) {
-            console.error('Failed to get config:', fallbackErr)
-          }
-        }
-
-        console.error('Failed to initialize service:', err)
-        toast({
-          title: 'Initialization Error',
-          description: 'Failed to start service for this game',
-          variant: 'destructive'
-        })
-        navigate('/')
-      }
-    }
-
-    ensureServiceInitialized()
+    clearAchievementIconCache()
+    achievements.clearAll()
+    stats.clearAll()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appId, numericAppId, navigate])
-
-  // Achievement toggle handler
-  const handleAchievementToggle = (id: string, unlocked: boolean) => {
-    const achievement = gameData?.achievements.find(a => a.id === id)
-    if (!achievement) return
-
-    // Client-side protected check
-    if (achievement.isProtected) {
-      toast({
-        title: 'Cannot modify achievement',
-        description: 'This achievement is protected and cannot be changed.',
-        variant: 'destructive'
-      })
-      return
-    }
-
-    setModifiedAchievements(prev => {
-      const next = new Map(prev)
-
-      // If returning to original value, remove from modified map
-      if (unlocked === achievement.isAchieved) {
-        next.delete(id)
-      } else {
-        next.set(id, unlocked)
-      }
-
-      return next
-    })
-  }
-
-  // Stat update handler with validation
-  const handleStatUpdate = (id: string, value: number) => {
-    const stat = gameData?.stats.find(s => s.id === id)
-    const originalStat = originalData?.stats.find(s => s.id === id)
-    if (!stat) return
-
-    // Protected check
-    if (stat.isProtected) {
-      setValidationErrors(prev => new Map(prev).set(id, 'Protected stat cannot be modified'))
-      return
-    }
-
-    // Type validation
-    if (stat.type === 'int' && !Number.isInteger(value)) {
-      setValidationErrors(prev => new Map(prev).set(id, 'Value must be an integer'))
-      return
-    }
-
-    // NaN/Infinity check for floats
-    if (stat.type === 'float' && (isNaN(value) || !isFinite(value))) {
-      setValidationErrors(prev => new Map(prev).set(id, 'Invalid float value'))
-      return
-    }
-
-    // Increment-only validation (compare against ORIGINAL value)
-    if (stat.incrementOnly && originalStat && value < originalStat.value) {
-      setValidationErrors(prev =>
-        new Map(prev).set(id, `Cannot decrease below ${originalStat.value}`)
-      )
-      return
-    }
-
-    // Min/max warning (backend will clamp, but show warning)
-    if (value < stat.minValue || value > stat.maxValue) {
-      setValidationErrors(prev =>
-        new Map(prev).set(id, `Value will be clamped to [${stat.minValue}, ${stat.maxValue}]`)
-      )
-    } else {
-      // Clear validation error
-      setValidationErrors(prev => {
-        const next = new Map(prev)
-        next.delete(id)
-        return next
-      })
-    }
-
-    // Update modified stats
-    setModifiedStats(prev => {
-      const next = new Map(prev)
-
-      // If returning to CURRENT value, remove from modified map
-      if (value === stat.value) {
-        next.delete(id)
-      } else {
-        next.set(id, value)
-      }
-
-      return next
-    })
-  }
+  }, [numericAppId])
 
   // Save flow
   const handleSave = async () => {
@@ -235,8 +112,8 @@ export default function ManagerView() {
 
     try {
       // Step 1: Update achievements only if modified
-      if (modifiedAchievements.size > 0) {
-        const updates = Array.from(modifiedAchievements.entries()).map(([id, unlocked]) => ({
+      if (achievements.modifiedAchievements.size > 0) {
+        const updates = Array.from(achievements.modifiedAchievements.entries()).map(([id, unlocked]) => ({
           id,
           unlocked
         }))
@@ -244,21 +121,19 @@ export default function ManagerView() {
       }
 
       // Step 2: Update stats only if modified
-      if (modifiedStats.size > 0) {
-        const updates = Array.from(modifiedStats.entries()).map(([id, value]) => ({ id, value }))
+      if (stats.modifiedStats.size > 0) {
+        const updates = Array.from(stats.modifiedStats.entries()).map(([id, value]) => ({ id, value }))
         await updateStatsMutation.mutateAsync(updates)
       }
 
       // Step 3: Commit to Steam
-      if (modifiedAchievements.size > 0 || modifiedStats.size > 0) {
+      if (achievements.modifiedAchievements.size > 0 || stats.modifiedStats.size > 0) {
         await storeChangesMutation.mutateAsync()
       }
 
       // Step 4: Clear local state
-      setModifiedAchievements(new Map())
-      setModifiedStats(new Map())
-      setValidationErrors(new Map())
-      setStatInputs(new Map())
+      achievements.clearAll()
+      stats.clearAll()
 
       // Step 5: Show success toast
       toast({
@@ -280,11 +155,8 @@ export default function ManagerView() {
     try {
       await resetMutation.mutateAsync(includeAchievements)
 
-      // Clear local state immediately
-      setModifiedAchievements(new Map())
-      setModifiedStats(new Map())
-      setValidationErrors(new Map())
-      setStatInputs(new Map())
+      achievements.clearAll()
+      stats.clearAll()
 
       toast({
         title: 'Stats reset',
@@ -295,6 +167,7 @@ export default function ManagerView() {
       })
 
       setResetDialogOpen(false)
+      setIncludeAchievements(false)
     } catch (error) {
       toast({
         title: 'Reset failed',
@@ -304,60 +177,8 @@ export default function ManagerView() {
     }
   }
 
-  // Bulk operations
-  const handleUnlockAll = () => {
-    if (!window.confirm('Unlock all achievements?')) return
-
-    gameData?.achievements.forEach(achievement => {
-      if (!achievement.isProtected && !achievement.isAchieved) {
-        handleAchievementToggle(achievement.id, true)
-      }
-    })
-  }
-
-  const handleLockAll = () => {
-    if (!window.confirm('Lock all achievements? This will mark them as not completed.')) return
-
-    gameData?.achievements.forEach(achievement => {
-      if (!achievement.isProtected && achievement.isAchieved) {
-        handleAchievementToggle(achievement.id, false)
-      }
-    })
-  }
-
-  // Back to picker flow
-  const handleBackToPicker = async () => {
-    setIsReturningToPicker(true)
-
-    try {
-      const bridge = window.electron
-      if (!bridge?.restartServiceNeutral) {
-        navigate('/')
-        return
-      }
-
-      // Restart in neutral mode (no SAM_FORCE_APP_ID)
-      const result = await bridge.restartServiceNeutral()
-
-      // CRITICAL: Update API config before navigation
-      updateAPIConfig({ baseUrl: result.baseUrl, token: result.token })
-
-      navigate('/')
-    } catch (err) {
-      console.error('Failed to restart service:', err)
-      toast({
-        title: 'Warning',
-        description: 'Service restart failed. Navigating to picker anyway.',
-        variant: 'destructive'
-      })
-      navigate('/')
-    } finally {
-      setIsReturningToPicker(false)
-    }
-  }
-
   // Loading overlay
-  const showLoadingOverlay = isSaving || isRefetching || resetMutation.isPending || isReturningToPicker
+  const showLoadingOverlay = isSaving || isRefetching || resetMutation.isPending || isNavigatingBack
 
   // Show fetch error
   if (error) {
@@ -379,8 +200,8 @@ export default function ManagerView() {
     )
   }
 
-  // Show loading
-  if (isLoading) {
+  // Show loading (includes pre-service-ready state when query is disabled)
+  if (isLoading || !serviceReady) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
@@ -402,7 +223,7 @@ export default function ManagerView() {
               {isSaving && 'Saving changes...'}
               {isRefetching && 'Refreshing data...'}
               {resetMutation.isPending && 'Resetting stats...'}
-              {isReturningToPicker && 'Returning to game picker...'}
+              {isNavigatingBack && 'Returning to game picker...'}
             </p>
           </div>
         </div>
@@ -416,7 +237,7 @@ export default function ManagerView() {
         </div>
 
         <div className="flex gap-2">
-          <Button onClick={handleSave} disabled={!hasChanges || hasErrors || isSaving}>
+          <Button onClick={handleSave} disabled={!hasChanges || stats.hasErrors || isSaving}>
             {isSaving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -427,11 +248,14 @@ export default function ManagerView() {
             )}
           </Button>
 
-          <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+          <Dialog open={resetDialogOpen} onOpenChange={(open) => {
+            setResetDialogOpen(open)
+            if (!open) setIncludeAchievements(false)
+          }}>
             <DialogTrigger asChild>
               <Button variant="outline">Reset Stats</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sam-glass-panel">
               <DialogHeader>
                 <DialogTitle>Reset Statistics</DialogTitle>
                 <DialogDescription>
@@ -466,252 +290,90 @@ export default function ManagerView() {
             </DialogContent>
           </Dialog>
 
-          <Button variant="ghost" size="icon" onClick={() => refetch()} disabled={isRefetching}>
-            <RefreshCw className={cn('h-4 w-4', isRefetching && 'animate-spin')} />
-          </Button>
+          {/* Bulk action confirmation dialog */}
+          <Dialog
+            open={achievements.bulkActionDialogOpen}
+            onOpenChange={(open) => {
+              if (!open) achievements.closeBulkActionDialog()
+            }}
+          >
+            <DialogContent className="sam-glass-panel">
+              <DialogHeader>
+                <DialogTitle>
+                  {achievements.pendingBulkAction === 'unlock'
+                    ? 'Unlock all achievements?'
+                    : 'Lock all achievements?'}
+                </DialogTitle>
+                <DialogDescription>
+                  {achievements.pendingBulkAction === 'unlock'
+                    ? 'Confirming will stage all non-protected achievements as unlocked.'
+                    : 'Confirming will stage all non-protected achievements as locked.'}
+                </DialogDescription>
+              </DialogHeader>
 
-          <Button variant="ghost" size="icon" onClick={handleBackToPicker} disabled={isReturningToPicker}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
+              <p className="text-sm text-muted-foreground">
+                This does not commit to Steam immediately. Click <strong>Save Changes</strong> after
+                confirming to apply everything.
+              </p>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={achievements.closeBulkActionDialog}>
+                  Cancel
+                </Button>
+                <Button
+                  variant={achievements.pendingBulkAction === 'lock' ? 'destructive' : 'default'}
+                  onClick={achievements.handleConfirmBulkAction}
+                >
+                  {achievements.pendingBulkAction === 'unlock' ? 'Stage Unlock All' : 'Stage Lock All'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => refetch()} disabled={isRefetching} aria-label="Refresh data">
+                  <RefreshCw className={cn('h-4 w-4', isRefetching && 'animate-spin')} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Refresh data</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
       {/* Content area */}
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Achievements Section */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">
-              Achievements ({gameData?.achievements.length || 0})
-              {modifiedAchievements.size > 0 && (
-                <span className="text-sm text-yellow-600 dark:text-yellow-400 ml-2">
-                  ({modifiedAchievements.size} modified)
-                </span>
-              )}
-            </h3>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleUnlockAll}>
-                <Unlock className="h-3 w-3 mr-1" />
-                Unlock All
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleLockAll}>
-                <Lock className="h-3 w-3 mr-1" />
-                Lock All
-              </Button>
-            </div>
-          </div>
+        <AchievementsSection
+          totalCount={gameData?.achievements.length ?? 0}
+          filteredAchievements={achievements.filteredAchievements}
+          modifiedAchievements={achievements.modifiedAchievements}
+          appId={numericAppId}
+          searchQuery={achievements.searchQuery}
+          onSearchChange={achievements.setSearchQuery}
+          sortOrder={achievements.sortOrder}
+          onSortOrderChange={achievements.applySortOrder}
+          onToggle={achievements.handleAchievementToggle}
+          onBulkAction={achievements.openBulkActionDialog}
+        />
 
-          <div className="space-y-2">
-            {gameData?.achievements.map(achievement => {
-              const isModified = modifiedAchievements.has(achievement.id)
-              const currentValue = isModified
-                ? modifiedAchievements.get(achievement.id)!
-                : achievement.isAchieved
-
-              return (
-                <AchievementItem
-                  key={achievement.id}
-                  achievement={achievement}
-                  currentValue={currentValue}
-                  isModified={isModified}
-                  onToggle={handleAchievementToggle}
-                />
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Stats Section */}
-        <div>
-          <h3 className="text-lg font-semibold mb-4">
-            Stats ({gameData?.stats.length || 0})
-            {modifiedStats.size > 0 && (
-              <span className="text-sm text-yellow-600 dark:text-yellow-400 ml-2">
-                ({modifiedStats.size} modified)
-              </span>
-            )}
-          </h3>
-
-          <div className="space-y-2">
-            {gameData?.stats.map(stat => {
-              const originalStat = originalData?.stats.find(s => s.id === stat.id)
-              const isModified = modifiedStats.has(stat.id)
-              const validationError = validationErrors.get(stat.id)
-
-              return (
-                <StatItem
-                  key={stat.id}
-                  stat={stat}
-                  originalValue={originalStat?.value ?? stat.value}
-                  isModified={isModified}
-                  validationError={validationError}
-                  modifiedStats={modifiedStats}
-                  statInputs={statInputs}
-                  setStatInputs={setStatInputs}
-                  onUpdate={handleStatUpdate}
-                />
-              )
-            })}
-          </div>
-        </div>
+        <StatsSection
+          gameData={gameData}
+          originalData={originalData}
+          modifiedStats={stats.modifiedStats}
+          statValidations={stats.statValidations}
+          statInputs={stats.statInputs}
+          setStatInputs={stats.setStatInputs}
+          warningCount={stats.warningCount}
+          errorCount={stats.errorCount}
+          onUpdate={stats.handleStatUpdate}
+          onRevert={stats.handleStatRevert}
+          onClearValidation={stats.handleClearStatValidation}
+        />
       </div>
-    </div>
-  )
-}
-
-// Achievement item component
-function AchievementItem({
-  achievement,
-  currentValue,
-  isModified,
-  onToggle
-}: {
-  achievement: Achievement
-  currentValue: boolean
-  isModified: boolean
-  onToggle: (id: string, unlocked: boolean) => void
-}) {
-  return (
-    <div
-      className={cn(
-        'p-4 border rounded-lg flex items-center justify-between',
-        isModified && 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20'
-      )}
-    >
-      <div className="flex-1">
-        <div className="flex items-center gap-2">
-          <p
-            className={cn(
-              'font-medium',
-              achievement.isProtected && 'text-red-600 dark:text-red-400'
-            )}
-          >
-            {achievement.name}
-          </p>
-          {achievement.isProtected && (
-            <span className="text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 px-2 py-0.5 rounded">
-              Protected
-            </span>
-          )}
-          {achievement.isHidden && (
-            <span className="text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded">
-              Hidden
-            </span>
-          )}
-        </div>
-        <p className="text-sm text-muted-foreground">{achievement.description}</p>
-        {achievement.unlockTime && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Unlocked: {new Date(achievement.unlockTime).toLocaleString()}
-          </p>
-        )}
-      </div>
-      <Switch
-        checked={currentValue}
-        onCheckedChange={checked => onToggle(achievement.id, checked)}
-        disabled={achievement.isProtected}
-      />
-    </div>
-  )
-}
-
-// Stat item component
-function StatItem({
-  stat,
-  originalValue,
-  isModified,
-  validationError,
-  modifiedStats,
-  statInputs,
-  setStatInputs,
-  onUpdate
-}: {
-  stat: Stat
-  originalValue: number
-  isModified: boolean
-  validationError?: string
-  modifiedStats: Map<string, number>
-  statInputs: Map<string, string>
-  setStatInputs: React.Dispatch<React.SetStateAction<Map<string, string>>>
-  onUpdate: (id: string, value: number) => void
-}) {
-  const currentValue = isModified ? modifiedStats.get(stat.id)! : stat.value
-  const inputValue =
-    statInputs.get(stat.id) ??
-    (isModified ? modifiedStats.get(stat.id)!.toString() : stat.value.toString())
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setStatInputs(prev => new Map(prev).set(stat.id, e.target.value))
-  }
-
-  const handleBlur = () => {
-    const text = statInputs.get(stat.id) ?? currentValue.toString()
-    const parsed = stat.type === 'int' ? parseInt(text, 10) : parseFloat(text)
-
-    if (isNaN(parsed)) {
-      // Invalid input: revert to current value
-      setStatInputs(prev => {
-        const next = new Map(prev)
-        next.delete(stat.id)
-        return next
-      })
-      return
-    }
-
-    // Valid parse: update modifiedStats and clear input text
-    onUpdate(stat.id, parsed)
-    setStatInputs(prev => {
-      const next = new Map(prev)
-      next.delete(stat.id)
-      return next
-    })
-  }
-
-  return (
-    <div
-      className={cn(
-        'p-4 border rounded-lg',
-        isModified && 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20',
-        validationError && 'border-red-500'
-      )}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <p className={cn('font-medium', stat.isProtected && 'text-red-600 dark:text-red-400')}>
-            {stat.displayName}
-          </p>
-          {stat.isProtected && (
-            <span className="text-xs bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300 px-2 py-0.5 rounded">
-              Protected
-            </span>
-          )}
-          {stat.incrementOnly && (
-            <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded">
-              Increment Only
-            </span>
-          )}
-        </div>
-        <span className="text-xs text-muted-foreground">Type: {stat.type}</span>
-      </div>
-
-      <Input
-        type="text"
-        value={inputValue}
-        onChange={handleChange}
-        onBlur={handleBlur}
-        disabled={stat.isProtected}
-        step={stat.type === 'float' ? '0.01' : '1'}
-        className={validationError && 'border-red-500'}
-      />
-
-      <div className="flex justify-between text-xs text-muted-foreground mt-1">
-        <span>Min: {stat.minValue}</span>
-        <span>Max: {stat.maxValue}</span>
-      </div>
-
-      {validationError && (
-        <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationError}</p>
-      )}
     </div>
   )
 }

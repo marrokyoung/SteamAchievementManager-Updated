@@ -360,6 +360,83 @@ namespace SAM.Picker
             }
         }
 
+        private string ResolveGameType(uint appId, string listType, string appName)
+        {
+            var normalizedType = NormalizeGameType(listType);
+            if (!string.Equals(normalizedType, "normal", StringComparison.Ordinal))
+            {
+                return normalizedType;
+            }
+
+            var appType = _SteamClient.SteamApps001.GetAppData(appId, "type");
+            if (string.Equals(appType, "demo", StringComparison.OrdinalIgnoreCase))
+            {
+                return "demo";
+            }
+
+            bool nameHintsDemo = ContainsWholeWord(appName, "demo");
+
+            // Local fallback for missing type metadata.
+            if (string.IsNullOrWhiteSpace(appType) && nameHintsDemo)
+            {
+                return "demo";
+            }
+
+            // Some demo apps do not expose a local "type" and may not include "Demo" in localized names.
+            // In that case, use the Store appdetails metadata as secondary signal.
+            if (string.IsNullOrWhiteSpace(appType) ||
+                nameHintsDemo)
+            {
+                if (API.SteamStoreAppTypeResolver.TryGetIsDemo(appId, out bool isStoreDemo) == true &&
+                    isStoreDemo == true)
+                {
+                    return "demo";
+                }
+            }
+
+            return normalizedType;
+        }
+
+        private static bool ContainsWholeWord(string text, string word)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return false;
+            }
+
+            int idx = text.IndexOf(word, StringComparison.OrdinalIgnoreCase);
+            while (idx >= 0)
+            {
+                bool startOk = idx == 0 || !char.IsLetterOrDigit(text[idx - 1]);
+                bool endOk = idx + word.Length >= text.Length || !char.IsLetterOrDigit(text[idx + word.Length]);
+                if (startOk && endOk)
+                {
+                    return true;
+                }
+                idx = text.IndexOf(word, idx + 1, StringComparison.OrdinalIgnoreCase);
+            }
+            return false;
+        }
+
+        private static string NormalizeGameType(string type)
+        {
+            if (string.IsNullOrWhiteSpace(type))
+            {
+                return "normal";
+            }
+
+            var normalized = type.Trim().ToLowerInvariant();
+            return normalized switch
+            {
+                "normal" => "normal",
+                "game" => "normal",
+                "demo" => "demo",
+                "mod" => "mod",
+                "junk" => "junk",
+                _ => normalized
+            };
+        }
+
         private string GetGameImageUrl(uint id)
         {
             string candidate;
@@ -436,8 +513,10 @@ namespace SAM.Picker
                 return;
             }
 
-            GameInfo info = new(id, type);
-            info.Name = _SteamClient.SteamApps001.GetAppData(info.Id, "name");
+            var name = _SteamClient.SteamApps001.GetAppData(id, "name");
+            var resolvedType = ResolveGameType(id, type, name);
+            GameInfo info = new(id, resolvedType);
+            info.Name = name;
             _Games.Add(id, info);
         }
 

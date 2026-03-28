@@ -3,6 +3,7 @@ export interface Game {
   name: string
   type: string
   imageUrl: string | null
+  imageType?: 'logo' | 'capsule' | null  // Optional: this is just metadata for aspect handling
   owned: boolean
 }
 

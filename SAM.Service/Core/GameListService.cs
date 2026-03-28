@@ -75,14 +75,16 @@ namespace SAM.Service.Core
                 }
 
                 var name = client.SteamApps001.GetAppData(kv.Key, "name");
-                var imageUrl = GetGameImageUrl(client, kv.Key);
+                var type = ResolveGameType(client, kv.Key, kv.Value, name);
+                var (imageUrl, imageType) = GetGameImageUrl(kv.Key);
 
                 games.Add(new GameDto
                 {
                     Id = kv.Key,
                     Name = name ?? $"App {kv.Key}",
-                    Type = kv.Value,
+                    Type = type,
                     ImageUrl = imageUrl,
+                    ImageType = imageType,
                     Owned = owns
                 });
 
@@ -99,36 +101,87 @@ namespace SAM.Service.Core
             return games.OrderBy(g => g.Name).ToList();
         }
 
-        private static string GetGameImageUrl(Client client, uint appId)
+        private static string ResolveGameType(Client client, uint appId, string listType, string appName)
         {
-            var currentLanguage = client.SteamApps008.GetCurrentGameLanguage();
-
-            // Try small_capsule for current language
-            var candidate = client.SteamApps001.GetAppData(appId,
-                $"small_capsule/{currentLanguage}");
-            if (!string.IsNullOrEmpty(candidate))
+            var normalizedType = NormalizeGameType(listType);
+            if (!string.Equals(normalizedType, "normal", StringComparison.Ordinal))
             {
-                return $"https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/{appId}/{candidate}";
+                return normalizedType;
             }
 
-            // Fallback to English if not current language
-            if (currentLanguage != "english")
+            var appType = client.SteamApps001.GetAppData(appId, "type");
+            if (string.Equals(appType, "demo", StringComparison.OrdinalIgnoreCase))
             {
-                candidate = client.SteamApps001.GetAppData(appId, "small_capsule/english");
-                if (!string.IsNullOrEmpty(candidate))
+                return "demo";
+            }
+
+            bool nameHintsDemo = ContainsWholeWord(appName, "demo");
+
+            // Local fallback for missing type metadata.
+            if (string.IsNullOrWhiteSpace(appType) && nameHintsDemo)
+            {
+                return "demo";
+            }
+
+            // Some demo apps do not expose a local "type" and may not include "Demo" in localized names.
+            // In that case, use the Store appdetails metadata as secondary signal.
+            if (string.IsNullOrWhiteSpace(appType) ||
+                nameHintsDemo)
+            {
+                if (SteamStoreAppTypeResolver.TryGetIsDemo(appId, out bool isStoreDemo) == true &&
+                    isStoreDemo == true)
                 {
-                    return $"https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/{appId}/{candidate}";
+                    return "demo";
                 }
             }
 
-            // Fallback to logo
-            candidate = client.SteamApps001.GetAppData(appId, "logo");
-            if (!string.IsNullOrEmpty(candidate))
+            return normalizedType;
+        }
+
+        private static bool ContainsWholeWord(string text, string word)
+        {
+            if (string.IsNullOrEmpty(text))
             {
-                return $"https://cdn.steamstatic.com/steamcommunity/public/images/apps/{appId}/{candidate}.jpg";
+                return false;
             }
 
-            return null;
+            int idx = text.IndexOf(word, StringComparison.OrdinalIgnoreCase);
+            while (idx >= 0)
+            {
+                bool startOk = idx == 0 || !char.IsLetterOrDigit(text[idx - 1]);
+                bool endOk = idx + word.Length >= text.Length || !char.IsLetterOrDigit(text[idx + word.Length]);
+                if (startOk && endOk)
+                {
+                    return true;
+                }
+                idx = text.IndexOf(word, idx + 1, StringComparison.OrdinalIgnoreCase);
+            }
+            return false;
+        }
+
+        private static string NormalizeGameType(string type)
+        {
+            if (string.IsNullOrWhiteSpace(type))
+            {
+                return "normal";
+            }
+
+            var normalized = type.Trim().ToLowerInvariant();
+            return normalized switch
+            {
+                "normal" => "normal",
+                "game" => "normal",
+                "demo" => "demo",
+                "mod" => "mod",
+                "junk" => "junk",
+                _ => normalized
+            };
+        }
+
+        private static (string url, string imageType) GetGameImageUrl(uint appId)
+        {
+            // Return the image endpoint - server handles the fallback logic.
+            return ($"/api/games/{appId}/image", null);
         }
     }
 }

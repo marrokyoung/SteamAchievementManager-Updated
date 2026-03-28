@@ -2,7 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
-using System.Threading.Tasks;
+using System.Net.Http;
+using System.Threading.Tasks;  // Still needed for GetGames
 using System.Web.Http;
 using SAM.Service.Core;
 using SAM.Service.Models;
@@ -238,7 +239,7 @@ namespace SAM.Service.Controllers
             {
                 return BadRequest(ex.Message);
             }
-            catch (System.IO.FileNotFoundException ex)
+            catch (System.IO.FileNotFoundException)
             {
                 return Content(HttpStatusCode.NotFound, new ErrorResponse
                 {
@@ -649,6 +650,147 @@ namespace SAM.Service.Controllers
             {
                 return InternalServerError(ex);
             }
+        }
+
+        /// <summary>
+        /// GET /api/games/{appId}/image - Serve game image (local Steam cache or CDN redirect)
+        /// Serves local standard art if available, otherwise redirects to CDN header.
+        /// Client handles GET-based fallbacks if CDN header fails.
+        /// </summary>
+        [HttpGet]
+        [Route("games/{appId}/image")]
+        public IHttpActionResult GetGameImage(uint appId)
+        {
+            try
+            {
+                // Validate appId
+                if (appId == 0)
+                {
+                    return BadRequest("Invalid appId");
+                }
+
+                // Resolve local image path and type
+                var (localPath, sourceType) = SteamImageResolver.ResolveLocalImagePath(appId);
+
+                // Serve local STANDARD art if available (best case)
+                if (localPath != null &&
+                    sourceType == SteamImageResolver.ImageSourceType.Standard &&
+                    System.IO.File.Exists(localPath))
+                {
+                    API.SecurityLogger.Log(API.LogLevel.Info, API.LogContext.HTTP,
+                        $"Image serve: appId={appId} source=local path={localPath}");
+                    return ServeLocalFile(localPath);
+                }
+
+                // No local standard art - redirect to CDN header (client handles fallbacks via GET)
+                API.SecurityLogger.Log(API.LogLevel.Info, API.LogContext.HTTP,
+                    $"Image redirect: appId={appId} target=https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg");
+                return Redirect($"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg");
+            }
+            catch (System.IO.IOException ex)
+            {
+                API.SecurityLogger.Log(API.LogLevel.Warning, API.LogContext.HTTP,
+                    $"Failed to serve image for AppId {appId}: {ex.Message}");
+
+                // Fallback to CDN header on read error
+                return Redirect($"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/header.jpg");
+            }
+            catch (Exception ex)
+            {
+                API.SecurityLogger.Log(API.LogLevel.Error, API.LogContext.HTTP,
+                    $"Unexpected error serving image for AppId {appId}: {ex.Message}");
+                return InternalServerError(ex);
+            }
+        }
+
+        /// <summary>
+        /// GET /api/games/{appId}/logo - Serve local logo or redirect to CDN logo
+        /// This is the fallback endpoint after all splash art options are exhausted
+        /// </summary>
+        [HttpGet]
+        [Route("games/{appId}/logo")]
+        public IHttpActionResult GetGameLogo(uint appId)
+        {
+            try
+            {
+                // Validate appId
+                if (appId == 0)
+                {
+                    return BadRequest("Invalid appId");
+                }
+
+                // Resolve local image path and type
+                var (localPath, sourceType) = SteamImageResolver.ResolveLocalImagePath(appId);
+
+                // Serve local logo if available (reuse streaming logic with cache headers)
+                if (localPath != null &&
+                    sourceType == SteamImageResolver.ImageSourceType.Logo &&
+                    System.IO.File.Exists(localPath))
+                {
+                    return ServeLocalFile(localPath);
+                }
+
+                // No local logo - redirect to CDN logo
+                return Redirect($"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/logo.png");
+            }
+            catch (System.IO.IOException ex)
+            {
+                API.SecurityLogger.Log(API.LogLevel.Warning, API.LogContext.HTTP,
+                    $"Failed to serve logo for AppId {appId}: {ex.Message}");
+
+                // Fallback to CDN logo on read error
+                return Redirect($"https://cdn.cloudflare.steamstatic.com/steam/apps/{appId}/logo.png");
+            }
+            catch (Exception ex)
+            {
+                API.SecurityLogger.Log(API.LogLevel.Error, API.LogContext.HTTP,
+                    $"Unexpected error serving logo for AppId {appId}: {ex.Message}");
+                return InternalServerError(ex);
+            }
+        }
+
+        /// <summary>
+        /// Helper method to serve local files with proper headers (ETag, cache control)
+        /// </summary>
+        private IHttpActionResult ServeLocalFile(string localPath)
+        {
+            var fileInfo = new System.IO.FileInfo(localPath);
+            var extension = System.IO.Path.GetExtension(localPath).ToLowerInvariant();
+            var contentType = extension switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".webp" => "image/webp",
+                _ => "application/octet-stream"
+            };
+
+            // StreamContent owns the FileStream and will dispose it
+            var fileStream = new System.IO.FileStream(localPath, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.Read);
+            var streamContent = new System.Net.Http.StreamContent(fileStream);
+
+            streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+            streamContent.Headers.ContentLength = fileInfo.Length;
+
+            var response = new System.Net.Http.HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = streamContent
+            };
+
+            // Cache headers (1 hour max-age)
+            response.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
+            {
+                Public = true,
+                MaxAge = TimeSpan.FromHours(1)
+            };
+
+            // Add Last-Modified/ETag for conditional requests
+            response.Content.Headers.LastModified = fileInfo.LastWriteTimeUtc;
+            response.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue(
+                $"\"{fileInfo.LastWriteTimeUtc.Ticks:X}-{fileInfo.Length:X}\""
+            );
+
+            // StreamContent will dispose fileStream when response is disposed
+            return ResponseMessage(response);
         }
 
         private static string TranslateError(int id) => id switch

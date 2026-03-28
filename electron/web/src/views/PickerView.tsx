@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, Gamepad2, RefreshCw, Loader2, Filter } from 'lucide-react'
 import { useGames } from '@/hooks/useGameQueries'
-import { updateAPIConfig } from '@/lib/api'
+import { updateAPIConfig, initializeAPI } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/use-toast'
@@ -17,10 +17,10 @@ import {
 import type { Game } from '@/types/api'
 
 const GAME_TYPES = [
-  { value: 'normal', label: 'Games', color: 'blue' },
-  { value: 'demo', label: 'Demos', color: 'green' },
-  { value: 'mod', label: 'Mods', color: 'purple' },
-  { value: 'junk', label: 'Junk', color: 'gray' }
+  { value: 'normal', label: 'Games' },
+  { value: 'demo', label: 'Demos' },
+  { value: 'mod', label: 'Mods' },
+  { value: 'junk', label: 'Junk' }
 ] as const
 
 const normalizeGameType = (type: string) => {
@@ -30,6 +30,28 @@ const normalizeGameType = (type: string) => {
   if (type === 'junk') return 'junk'
   // Default unknown types to 'normal' for safety
   return 'normal'
+}
+
+// Helper to resolve full image URLs (relative API URLs need baseUrl prepended)
+const getFullImageUrl = async (imageUrl: string | null): Promise<string | null> => {
+  if (!imageUrl) return null
+
+  // If it's already a full URL (CDN), return as-is
+  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+    return imageUrl
+  }
+
+  // If it's a relative API URL, prepend baseUrl
+  if (imageUrl.startsWith('/api/')) {
+    try {
+      const config = await initializeAPI()
+      return `${config.baseUrl}${imageUrl}`
+    } catch {
+      return null
+    }
+  }
+
+  return imageUrl
 }
 
 export default function PickerView() {
@@ -117,15 +139,25 @@ export default function PickerView() {
   }
 
   return (
-    <div className="container mx-auto p-6">
+    <div className="container relative mx-auto max-w-7xl p-6 md:p-10">
       {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold mb-4">Select a Game</h2>
+      <div className="mb-6 space-y-2">
+        <span className="text-xs uppercase tracking-[0.2em] text-primary/80">
+          Library
+        </span>
+        <h2 className="text-3xl font-bold text-white">
+          Select a Game
+        </h2>
+        <p className="text-sm text-muted-foreground/80">
+          Search your Steam catalog, filter by type, and jump straight into managing achievements.
+        </p>
+      </div>
 
-        {/* Search and filter controls */}
-        <div className="flex gap-2 mb-4">
+      {/* Search and filter controls */}
+      <div className="mb-8 rounded-2xl sam-glass-panel p-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/70" />
             <Input
               type="text"
               placeholder="Search games..."
@@ -138,14 +170,14 @@ export default function PickerView() {
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button
-                variant={activeFilters.size > 0 && !showAllTypes ? 'default' : 'outline'}
-                size="sm"
+                variant="default"
+                className="h-11 min-w-[140px]"
               >
                 <Filter className="h-4 w-4 mr-2" />
                 Filter Types
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
+            <DropdownMenuContent align="start" className="mt-1">
               {/* Individual game type filters */}
               {GAME_TYPES.map(type => (
                 <DropdownMenuCheckboxItem
@@ -188,28 +220,38 @@ export default function PickerView() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <Button variant="ghost" size="icon" onClick={() => refetch()} title="Refresh games">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-11 w-11"
+            onClick={() => refetch()}
+            title="Refresh games"
+            aria-label="Refresh games"
+          >
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
-      </div>
 
-      {/* Results count */}
-      {!isLoading && (
-        <p className="text-sm text-muted-foreground mb-4">
-          Showing {filteredGames.length} of {games?.length || 0} games
-        </p>
-      )}
+        {/* Results count */}
+        {!isLoading && (
+          <p className="text-xs text-muted-foreground/80 mt-3">
+            Showing {filteredGames.length} of {games?.length || 0} games
+          </p>
+        )}
+      </div>
 
       {/* Game grid */}
       {isLoading ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
           {[...Array(15)].map((_, i) => (
-            <div key={i} className="h-40 bg-muted animate-pulse rounded-lg" />
+            <div
+              key={i}
+              className="h-44 rounded-xl sam-glass-panel animate-pulse"
+            />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-5">
           {filteredGames.map(game => (
             <GameCard
               key={game.id}
@@ -223,10 +265,10 @@ export default function PickerView() {
 
       {/* Empty state */}
       {!isLoading && filteredGames.length === 0 && (
-        <div className="text-center py-12">
-          <Gamepad2 className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-          <p className="text-lg font-medium text-muted-foreground mb-2">No games found</p>
-          <p className="text-sm text-muted-foreground">
+        <div className="mt-6 rounded-2xl sam-glass-panel p-12 text-center">
+          <Gamepad2 className="h-16 w-16 text-muted-foreground/70 mx-auto mb-4" />
+          <p className="text-lg font-semibold text-white mb-2">No games found</p>
+          <p className="text-sm text-muted-foreground/80">
             Try adjusting your search or filters
           </p>
         </div>
@@ -245,70 +287,158 @@ function GameCard({
   onClick: (appId: number) => void
   isInitializing: boolean
 }) {
-  const normalizedType = normalizeGameType(game.type)
-  const typeConfig = GAME_TYPES.find(t => t.value === normalizedType)
+  const [imageError, setImageError] = useState(false)
+  const [imageLoaded, setImageLoaded] = useState(false)
+  const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null)
+  const [fallbackStep, setFallbackStep] = useState(0)
+  const [isLogoFallback, setIsLogoFallback] = useState(false)
+  const hasArt = !!currentImageUrl && !imageError
+
+  // Track if component is mounted (for async safety in ALL async operations)
+  const isMountedRef = useRef(true)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => { isMountedRef.current = false }
+  }, [])
+
+  // Client GET-based fallback chain for when initial image fails (splash art only)
+  // Server redirects to header.jpg; if that fails, client tries these in order
+  const cdnFallbacks = [
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/header.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/library_hero.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/library_600x900.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/hero.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/capsule_616x353.jpg`,
+    `https://cdn.cloudflare.steamstatic.com/steam/apps/${game.id}/capsule_231x87.jpg`,
+    `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${game.id}/capsule_sm_120.jpg`,
+    `/api/games/${game.id}/logo`
+  ]
+  const LOGO_FALLBACK_START_INDEX = cdnFallbacks.length - 1 // last entry is logo
+
+  // Reset on game change - guard with per-effect cancellation token
+  useEffect(() => {
+    let isActive = true
+
+    setImageError(false)
+    setImageLoaded(false)
+    setFallbackStep(0)
+    setIsLogoFallback(false)
+    setCurrentImageUrl(null)
+
+    // Resolve full image URL (prepend baseUrl for relative API URLs)
+    getFullImageUrl(game.imageUrl).then(url => {
+      // Guard against setting state after unmount or game change
+      if (!isActive) return
+
+      if (url) {
+        setCurrentImageUrl(url)
+      } else {
+        // Initial URL failed - start fallback chain at index 0
+        setCurrentImageUrl(cdnFallbacks[0])
+      }
+    })
+
+    return () => { isActive = false }
+  }, [game.id, game.imageUrl])
+
+  // Advance through fallbacks on error using local loop to avoid async state issues
+  const handleImageError = async () => {
+    let localIndex = fallbackStep
+
+    while (localIndex < cdnFallbacks.length) {
+      const nextUrl = cdnFallbacks[localIndex]
+      localIndex++
+
+      // Skip if same as current URL
+      if (nextUrl === currentImageUrl) continue
+
+      const isLogo = (localIndex - 1) >= LOGO_FALLBACK_START_INDEX
+
+      // Resolve API URLs (relative paths)
+      let resolvedUrl: string | null = nextUrl
+      if (nextUrl.startsWith('/api/')) {
+        resolvedUrl = await getFullImageUrl(nextUrl)
+      }
+
+      // Check mount status after async operation
+      if (!isMountedRef.current) return
+
+      // If resolution failed, try next in loop
+      if (!resolvedUrl) continue
+
+      // Found a valid URL - update state and exit
+      setFallbackStep(localIndex)
+      setIsLogoFallback(isLogo)
+      setCurrentImageUrl(resolvedUrl)
+      return
+    }
+
+    // Exhausted all fallbacks
+    if (isMountedRef.current) {
+      setFallbackStep(localIndex)
+      setImageError(true)
+    }
+  }
 
   return (
     <button
       onClick={() => onClick(game.id)}
       disabled={isInitializing}
       className={cn(
-        'group relative h-40 overflow-hidden rounded-lg border-2 transition-all',
-        'hover:scale-105 hover:shadow-xl',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        'disabled:opacity-50 disabled:cursor-not-allowed',
-        game.owned
-          ? 'border-primary/50 bg-card hover:border-primary'
-          : 'border-muted bg-muted/50 hover:border-yellow-500'
+        'group relative aspect-[460/215] overflow-hidden rounded-xl border border-transparent transition-all duration-200',
+        'bg-white/5 shadow-[0_15px_45px_rgba(0,0,0,0.45)] hover:-translate-y-1',
+        'hover:shadow-[var(--accent-hover-shadow)]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-focus-ring)] focus-visible:ring-offset-0',
+        'disabled:opacity-50 disabled:cursor-not-allowed'
       )}
     >
-      {/* Image or placeholder */}
+      {/* Image with placeholder behind - placeholder visible until image loads */}
       <div className="relative w-full h-full">
-        {game.imageUrl ? (
+        {/* Placeholder always rendered behind */}
+        <div className={cn(
+          "absolute inset-0 flex items-center justify-center bg-gradient-to-br from-[var(--surface-row-from)] via-[var(--surface-row-via)] to-[var(--surface-row-to)] transition-opacity duration-300",
+          imageLoaded && hasArt ? "opacity-0" : "opacity-100"
+        )}>
+          <Gamepad2 className="h-16 w-16 text-muted-foreground/40" />
+        </div>
+
+        {/* Image fades in when loaded */}
+        {hasArt && (
           <img
-            src={game.imageUrl}
+            src={currentImageUrl || undefined}
             alt={game.name}
-            className="w-full h-full object-cover transition-transform group-hover:scale-110"
-            onError={(e) => {
-              // Fallback to placeholder on image load error
-              e.currentTarget.style.display = 'none'
-            }}
+            loading="lazy"
+            className={cn(
+              "w-full h-full transition-all duration-300",
+              (game.imageType === 'logo' || isLogoFallback)
+                ? 'object-contain p-8'
+                : 'object-cover group-hover:scale-110',
+              imageLoaded ? "opacity-100" : "opacity-0"
+            )}
+            onLoad={() => setImageLoaded(true)}
+            onError={handleImageError}
           />
-        ) : (
-          <div className="flex items-center justify-center h-full bg-gradient-to-br from-muted to-muted/50">
-            <Gamepad2 className="h-16 w-16 text-muted-foreground/30" />
-          </div>
         )}
 
         {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-transparent pointer-events-none" />
       </div>
 
       {/* Content overlay */}
-      <div className="absolute bottom-0 left-0 right-0 p-3">
-        <p className="text-sm font-semibold text-white line-clamp-2 mb-1">{game.name}</p>
+      <div className="absolute bottom-0 left-0 right-0 p-3 space-y-1">
+        {/* Title: always visible until image loads, then hover-only */}
+        <p className={cn(
+          "text-sm font-semibold text-white line-clamp-2 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] transition-opacity duration-200",
+          imageLoaded && hasArt ? "opacity-0 group-hover:opacity-100" : "opacity-100"
+        )}>
+          {game.name}
+        </p>
 
-        <div className="flex items-center gap-2">
-          {!game.owned && (
-            <span className="text-xs bg-yellow-500 text-yellow-950 px-2 py-0.5 rounded font-medium">
-              Not Owned
-            </span>
-          )}
-
-          {typeConfig && (
-            <span
-              className={cn(
-                'text-xs px-2 py-0.5 rounded font-medium',
-                normalizedType === 'demo' && 'bg-green-500/80 text-white',
-                normalizedType === 'mod' && 'bg-purple-500/80 text-white',
-                normalizedType === 'junk' && 'bg-gray-500/80 text-white',
-                normalizedType === 'normal' && 'bg-blue-500/80 text-white'
-              )}
-            >
-              {typeConfig.label}
-            </span>
-          )}
-        </div>
+        {!game.owned && (
+          <span className="text-xs bg-yellow-400/90 text-yellow-950 px-2 py-0.5 rounded-full font-semibold shadow-sm">
+            Not Owned
+          </span>
+        )}
       </div>
 
       {/* Loading indicator when initializing */}

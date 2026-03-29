@@ -4,6 +4,18 @@ import { randomBytes } from 'crypto'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
+// electron-updater is CJS — use a lazy dynamic import so the ESM main
+// process doesn't blow up at module-evaluation time.
+type AutoUpdater = import('electron-updater').AppUpdater
+let _autoUpdater: AutoUpdater | null = null
+async function getAutoUpdater(): Promise<AutoUpdater> {
+  if (!_autoUpdater) {
+    const mod = await import('electron-updater')
+    _autoUpdater = mod.autoUpdater ?? (mod as unknown as { default: { autoUpdater: AutoUpdater } }).default.autoUpdater
+  }
+  return _autoUpdater
+}
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
@@ -244,10 +256,80 @@ ipcMain.handle('get-current-app-id', () => {
   }
 })
 
+// Auto-update (packaged builds only)
+async function setupAutoUpdater() {
+  if (!app.isPackaged) {
+    console.log('[updater] Skipping auto-update in development')
+    return
+  }
+
+  const updater = await getAutoUpdater()
+
+  updater.autoDownload = false
+  updater.autoInstallOnAppQuit = false
+
+  updater.on('update-available', (info) => {
+    console.log('[updater] Update available:', info.version)
+    mainWindow?.webContents.send('update-available', {
+      version: info.version,
+      releaseNotes: info.releaseNotes
+    })
+  })
+
+  updater.on('update-not-available', () => {
+    console.log('[updater] No update available')
+  })
+
+  updater.on('download-progress', (progress) => {
+    mainWindow?.webContents.send('download-progress', {
+      percent: progress.percent,
+      transferred: progress.transferred,
+      total: progress.total
+    })
+  })
+
+  updater.on('update-downloaded', () => {
+    console.log('[updater] Update downloaded')
+    mainWindow?.webContents.send('update-downloaded')
+  })
+
+  updater.on('error', (err) => {
+    console.error('[updater] Error:', err.message)
+    mainWindow?.webContents.send('update-error', err.message)
+  })
+
+  // Don't check eagerly here — the renderer triggers the first check
+  // after its event subscriptions are in place (avoids lost notifications).
+}
+
+ipcMain.handle('check-for-updates', async () => {
+  if (!app.isPackaged) return { available: false }
+  try {
+    const updater = await getAutoUpdater()
+    const result = await updater.checkForUpdates()
+    return { available: !!result?.updateInfo }
+  } catch {
+    return { available: false }
+  }
+})
+
+ipcMain.handle('download-update', async () => {
+  const updater = await getAutoUpdater()
+  await updater.downloadUpdate()
+})
+
+ipcMain.handle('install-update', async () => {
+  // Stop the .NET service before quitting for install
+  await stopService()
+  const updater = await getAutoUpdater()
+  updater.quitAndInstall(false, true)
+})
+
 // App lifecycle
 app.whenReady().then(async () => {
   try {
     await startService()
+    await setupAutoUpdater()
     await createWindow()
   } catch (err) {
     console.error('Failed to start application:', err)

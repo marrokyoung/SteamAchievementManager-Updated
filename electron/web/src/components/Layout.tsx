@@ -13,8 +13,10 @@ import {
 import { toast } from './ui/use-toast'
 import { updateAPIConfig } from '@/lib/api'
 import { useUnsavedChanges } from '@/contexts/UnsavedChangesContext'
+import { useAutoUpdate } from '@/hooks/useAutoUpdate'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
+  useAutoUpdate()
   const location = useLocation()
   const navigate = useNavigate()
   const managerMatch = useMatch('/manager/:appId')

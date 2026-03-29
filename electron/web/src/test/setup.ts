@@ -36,5 +36,12 @@ beforeEach(() => {
       token: 'test-token',
     }),
     getCurrentAppId: vi.fn().mockResolvedValue(null),
+    checkForUpdates: vi.fn().mockResolvedValue({ available: false }),
+    downloadUpdate: vi.fn().mockResolvedValue(undefined),
+    installUpdate: vi.fn().mockResolvedValue(undefined),
+    onUpdateAvailable: vi.fn().mockReturnValue(vi.fn()),
+    onUpdateDownloaded: vi.fn().mockReturnValue(vi.fn()),
+    onDownloadProgress: vi.fn().mockReturnValue(vi.fn()),
+    onUpdateError: vi.fn().mockReturnValue(vi.fn()),
   }
 })

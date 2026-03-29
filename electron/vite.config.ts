@@ -15,7 +15,7 @@ export default defineConfig({
           build: {
             outDir: path.resolve(__dirname, 'dist-electron'),
             rollupOptions: {
-              external: ['electron'],
+              external: ['electron', 'electron-updater'],
               output: {
                 entryFileNames: 'index.js',
                 format: 'cjs'

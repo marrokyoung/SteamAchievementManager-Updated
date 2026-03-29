@@ -8,9 +8,10 @@
     "build": "vite build",
     "test": "vitest",
     "test:run": "vitest run",
+    "clean:dist": "node -e \"const fs=require('fs');['dist','dist-electron'].forEach(d=>{if(fs.existsSync(d)){fs.rmSync(d,{recursive:true,force:true});console.log('Removed '+d)}})\"",
     "build:service": "dotnet build ../SAM.Service/SAM.Service.csproj -c Release -p:Platform=x86",
     "prepackage": "npm run build:service",
-    "package": "npm run build && electron-builder"
+    "package": "npm run clean:dist && npm run build && electron-builder"
   },
   "keywords": [
     "steam",
@@ -52,6 +53,7 @@
     "@tanstack/react-query": "^5.90.11",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.8.3",
     "lucide-react": "^0.555.0",
     "next-themes": "^0.4.6",
     "react": "^19.2.0",
@@ -62,9 +64,19 @@
   "build": {
     "appId": "com.steam.achievementmanager",
     "productName": "Steam Achievement Manager",
+    "publish": {
+      "provider": "github",
+      "owner": "marrokyoung",
+      "repo": "SteamAchievementManager-Updated"
+    },
     "win": {
       "target": "nsis",
       "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
     },
     "extraResources": [
       {

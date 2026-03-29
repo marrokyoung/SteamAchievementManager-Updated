@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { HashRouter, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
 import PickerView from './views/PickerView'
 import ManagerView from './views/ManagerView'
@@ -7,7 +7,7 @@ import { UnsavedChangesProvider } from './contexts/UnsavedChangesContext'
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <UnsavedChangesProvider>
         <Layout>
           <Routes>
@@ -17,6 +17,6 @@ export default function App() {
         </Layout>
       </UnsavedChangesProvider>
       <Toaster />
-    </BrowserRouter>
+    </HashRouter>
   )
 }

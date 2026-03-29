@@ -29,8 +29,8 @@ namespace SAM.Service.Core
                 throw new Exception($"Failed to locate schema for AppId {appId}: {ex.Message}", ex);
             }
 
-            // Reuse SAM.Game's KeyValue parser
-            var kv = SAM.Game.KeyValue.LoadAsBinary(path) ?? throw new Exception($"Failed to parse schema file for AppId {appId}");
+            // Reuse SAM.Schema's KeyValue parser.
+            var kv = SAM.Schema.KeyValue.LoadAsBinary(path) ?? throw new Exception($"Failed to parse schema file for AppId {appId}");
             var currentLanguage = client.SteamApps008.GetCurrentGameLanguage();
 
             var achievements = new List<AchievementDefinitionDto>();
@@ -122,7 +122,7 @@ namespace SAM.Service.Core
             };
         }
 
-        private static string GetLocalizedString(SAM.Game.KeyValue kv, string language, string defaultValue)
+        private static string GetLocalizedString(SAM.Schema.KeyValue kv, string language, string defaultValue)
         {
             var name = kv[language].AsString("");
             if (!string.IsNullOrEmpty(name)) return name;

@@ -6,7 +6,7 @@ on:
       - 'electron/**'
       - 'SAM.Service/**'
       - 'SAM.API/**'
-      - 'SAM.Game/**'
+      - 'SAM.Schema/**'
       - '.github/workflows/package-smoke.yml'
   push:
     branches: [master, main]
@@ -14,7 +14,7 @@ on:
       - 'electron/**'
       - 'SAM.Service/**'
       - 'SAM.API/**'
-      - 'SAM.Game/**'
+      - 'SAM.Schema/**'
       - '.github/workflows/package-smoke.yml'
 
 jobs:

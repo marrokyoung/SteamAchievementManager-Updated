@@ -244,7 +244,7 @@ namespace SAM.Service.Controllers
                 return Content(HttpStatusCode.NotFound, new ErrorResponse
                 {
                     Error = "SchemaNotFound",
-                    Message = $"Schema file not found. Launch SAM.Game.exe {appId} first to trigger download.",
+                    Message = $"Schema file not found. Launch the desktop app for AppId {appId} once to trigger Steam's schema download, then try again.",
                     StatusCode = 404
                 });
             }

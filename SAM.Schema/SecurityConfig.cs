@@ -20,19 +20,19 @@
  *    distribution.
  */
 
-namespace SAM.Game
+namespace SAM.Schema
 {
     /// <summary>
-    /// Security configuration constants for Steam Achievement Manager Game layer
+    /// Security configuration constants for Steam Achievement Manager schema parsing.
     /// </summary>
     internal static class SecurityConfig
     {
-        // VDF Parsing Security (Game-specific)
+        // VDF parsing security
         public const int MAX_VDF_RECURSION_DEPTH = 32; // Realistic Steam VDF depth is 5-8
         public const int MAX_VDF_STRING_LENGTH = 32 * 1024; // 32 KB per string (Steam typically < 1KB)
         public const int MAX_VDF_STRING_ALLOCATION = 32 * 1024 * 1024; // 32 MB total per-string allocation limit
 
-        // XML Processing Security (Picker-specific)
+        // XML processing security
         public const int MAX_XML_ENTITY_EXPANSION = 1024;
         public const long MAX_XML_DOCUMENT_SIZE = 10 * 1024 * 1024; // 10 MB
 

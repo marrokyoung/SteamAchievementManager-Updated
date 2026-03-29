@@ -1,20 +1,44 @@
 # Steam Achievement Manager
 
-Steam Achievement Manager (SAM) is a lightweight, portable application used to manage achievements and statistics in the popular PC gaming platform Steam. This application requires the [Steam client](https://store.steampowered.com/about/), a Steam account and network access. Steam must be running and the user must be logged in.
+Steam Achievement Manager is a Windows desktop app for viewing and managing Steam achievements and stats.
 
-This is the code for SAM. The closed-source version originally released in 2008, last major release in 2011, and last updated in 2013 (a hotfix).
+This repository is the actively maintained Electron-based desktop release. It is the project users should download from and follow for current builds, updates, and release notes.
 
-The code is being made available so that those interested can do as they like with it.
+## Download
 
-There are some changes to the code since the last closed-source release:
-- General code maintenance to bring it into a more modern state.
-- Icons have been replaced with ones from the Fugue Icons set.
-- Version has been bumped to 7.0.x.x to indicate the open-source release.
+- Download page: https://marrokyoung.github.io/SteamAchievementManager-Updated/
+- Latest release: https://github.com/marrokyoung/SteamAchievementManager-Updated/releases/latest
 
-[Download latest release](https://github.com/gibbed/SteamAchievementManager/releases/latest).
+Releases ship as a one-click Windows installer and include in-app update support.
 
-[![Build status](https://ci.appveyor.com/api/projects/status/00vic6jliar6j0ol/branch/master?svg=true)](https://ci.appveyor.com/project/gibbed/steamachievementmanager/branch/master)
+## What This Repository Contains
+
+- `electron/` - Electron desktop app, installer packaging, updater integration, and React UI
+- `SAM.Service/` - local backend/service launched by the desktop app
+- `SAM.API/`, `SAM.Schema/` - supporting native and shared project code used by the app
+
+## Requirements
+
+- Windows
+- Steam installed and running
+- A logged-in Steam account
+- Network access
+
+## Development
+
+See `electron/README.md` for local setup, development, tests, and packaging commands.
+
+## Notes
+
+- This project is not affiliated with Valve.
+- The supported runtime for this app is the Windows Electron desktop build, not a browser-hosted/PWA deployment.
 
 ## Attribution
 
-Most (if not all) icons are from the [Fugue Icons](https://p.yusukekamiyamane.com/) set.
+- This repository builds on the original Steam Achievement Manager codebase by Rick (`gibbed`).
+- Original repository: https://github.com/gibbed/SteamAchievementManager
+- This repository contains substantial modifications, a new Electron desktop app, and a different release/distribution flow, but it does not claim authorship of the original base architecture.
+
+## License
+
+GPL-3.0. See `LICENSE.txt`.

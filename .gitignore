@@ -404,3 +404,6 @@ nul
 electron/dist/
 electron/dist-electron/
 electron/.vite/
+
+# Local dotnet CLI state
+.dotnet/

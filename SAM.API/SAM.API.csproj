@@ -1,20 +1,20 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Company>Gibbed</Company>
-    <Authors>Gibbed</Authors>
-    <Description></Description>
-    <Copyright>Copyright © Gibbed 2019</Copyright>
+    <Company>marrokyoung</Company>
+    <Authors>marrokyoung</Authors>
+    <Description>Steam Achievement Manager native interop and Steam API layer.</Description>
+    <Copyright>Original base architecture by Gibbed 2019; modifications Copyright © 2026 marrokyoung</Copyright>
   </PropertyGroup>
   <PropertyGroup>
-    <Version>7.0.0</Version>
-    <AssemblyVersion>7.0.0.0</AssemblyVersion>
-    <FileVersion>7.0.0.0</FileVersion>
+    <Version>8.0.0</Version>
+    <AssemblyVersion>8.0.0.0</AssemblyVersion>
+    <FileVersion>8.0.0.0</FileVersion>
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationIcon>Pink.ico</ApplicationIcon>
   </PropertyGroup>
   <PropertyGroup>
-    <RepositoryUrl>https://github.com/gibbed/SteamAchievementManager/</RepositoryUrl>
+    <RepositoryUrl>https://github.com/marrokyoung/SteamAchievementManager-Updated.git</RepositoryUrl>
     <RepositoryType>Git</RepositoryType>
   </PropertyGroup>
   <PropertyGroup>

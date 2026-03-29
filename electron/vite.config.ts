@@ -48,7 +48,8 @@ export default defineConfig({
   ],
   root: 'web',
   build: {
-    outDir: '../dist'
+    outDir: '../dist',
+    emptyOutDir: true
   },
   resolve: {
     alias: {

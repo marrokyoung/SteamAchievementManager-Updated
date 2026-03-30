@@ -1,16 +1,10 @@
+import { getElectronBridge } from '@/lib/electronBridge'
+
 let apiConfig: { baseUrl: string; token: string } | null = null
 
 export async function initializeAPI() {
   if (!apiConfig) {
-    const bridge = window.electron
-
-    if (!bridge?.getConfig) {
-      throw new Error(
-        'Electron bridge is unavailable. Make sure you are running inside the Electron app, not a plain browser.'
-      )
-    }
-
-    apiConfig = await bridge.getConfig()
+    apiConfig = await getElectronBridge().getConfig()
   }
   return apiConfig
 }

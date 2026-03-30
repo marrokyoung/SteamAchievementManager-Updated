@@ -28,6 +28,12 @@ Releases ship as a one-click Windows installer and include in-app update support
 
 See `electron/README.md` for local setup, development, tests, and packaging commands.
 
+## Release Flow
+
+- Push a tag matching `v*` to trigger `.github/workflows/release.yml`.
+- The release job builds `SAM.Service`, packages the Windows NSIS installer, and publishes the installer plus `latest.yml` to GitHub Releases.
+- `.github/workflows/pages.yml` deploys the `docs/` download page, which points users to the current GitHub release.
+
 ## Notes
 
 - This project is not affiliated with Valve.

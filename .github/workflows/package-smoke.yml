@@ -55,5 +55,5 @@ jobs:
       - name: Verify installer and update metadata exist
         shell: bash
         run: |
-          ls -la dist/*.exe
+          ls -la dist/Steam-Achievement-Manager-Setup.exe
           ls -la dist/latest.yml

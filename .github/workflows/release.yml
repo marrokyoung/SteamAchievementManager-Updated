@@ -51,5 +51,5 @@ jobs:
       - name: Verify release artifacts
         shell: bash
         run: |
-          ls -la dist/*.exe
+          ls -la dist/Steam-Achievement-Manager-Setup.exe
           ls -la dist/latest.yml

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Search, Gamepad2, RefreshCw, Loader2, Filter } from 'lucide-react'
 import { useGames } from '@/hooks/useGameQueries'
 import { updateAPIConfig, initializeAPI } from '@/lib/api'
+import { getElectronBridge } from '@/lib/electronBridge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/use-toast'
@@ -95,10 +96,7 @@ export default function PickerView() {
 
     setIsRestartingService(true)
     try {
-      const bridge = window.electron
-      if (!bridge?.startServiceForApp) {
-        throw new Error('Electron bridge not available')
-      }
+      const bridge = getElectronBridge()
 
       // Restart service with forced AppId
       const result = await bridge.startServiceForApp(appId)

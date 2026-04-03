@@ -12,6 +12,7 @@ import {
 } from './ui/dialog'
 import { toast } from './ui/use-toast'
 import { updateAPIConfig } from '@/lib/api'
+import { getElectronBridge } from '@/lib/electronBridge'
 import { useUnsavedChanges } from '@/contexts/UnsavedChangesContext'
 import { useAutoUpdate } from '@/hooks/useAutoUpdate'
 
@@ -32,12 +33,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
     setIsNavigatingBack(true)
     try {
-      const bridge = window.electron
-      if (!bridge?.restartServiceNeutral) {
-        navigate('/')
-        return
-      }
-
+      const bridge = getElectronBridge()
       const result = await bridge.restartServiceNeutral()
       updateAPIConfig({ baseUrl: result.baseUrl, token: result.token })
       navigate('/')
@@ -75,9 +71,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     performManagerBack()
   }, [setHasUnsavedChanges, performManagerBack])
 
-  const handleMinimize = () => window.electron?.windowMinimize?.()
-  const handleMaximize = () => window.electron?.windowMaximize?.()
-  const handleClose = () => window.electron?.windowClose?.()
+  const bridge = getElectronBridge()
+  const handleMinimize = () => bridge.windowMinimize()
+  const handleMaximize = () => bridge.windowMaximize()
+  const handleClose = () => bridge.windowClose()
 
   return (
     <div className="relative h-screen flex flex-col text-foreground">

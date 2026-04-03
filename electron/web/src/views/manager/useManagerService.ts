@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { updateAPIConfig } from '@/lib/api'
+import { getElectronBridge } from '@/lib/electronBridge'
 import { toast } from '@/components/ui/use-toast'
 
 /**
@@ -25,16 +26,11 @@ export function useManagerService(appId: string | undefined, numericAppId: numbe
     }
 
     const ensureServiceInitialized = async () => {
-      try {
-        const bridge = window.electron
-        if (!bridge?.startServiceForApp) {
-          // Browser mode - no service restart needed
-          if (activeAppIdRef.current === numericAppId) setServiceReady(true)
-          return
-        }
+      const bridge = getElectronBridge()
 
+      try {
         // If service already running for this app, reuse current config
-        const current = await bridge.getCurrentAppId?.()
+        const current = await bridge.getCurrentAppId()
         if (current && current.appId === numericAppId) {
           if (activeAppIdRef.current !== numericAppId) return
           updateAPIConfig({ baseUrl: current.baseUrl, token: current.token })
@@ -63,14 +59,11 @@ export function useManagerService(appId: string | undefined, numericAppId: numbe
         if (errorMessage.includes('restart already in progress')) {
           console.warn('Service restart in progress, using current config')
           try {
-            const bridge = window.electron
-            if (bridge?.getConfig) {
-              const config = await bridge.getConfig()
-              if (activeAppIdRef.current !== numericAppId) return
-              updateAPIConfig({ baseUrl: config.baseUrl, token: config.token })
-              setServiceReady(true)
-              return
-            }
+            const config = await bridge.getConfig()
+            if (activeAppIdRef.current !== numericAppId) return
+            updateAPIConfig({ baseUrl: config.baseUrl, token: config.token })
+            setServiceReady(true)
+            return
           } catch (fallbackErr) {
             console.error('Failed to get config:', fallbackErr)
           }

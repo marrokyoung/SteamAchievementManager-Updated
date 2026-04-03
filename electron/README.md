@@ -2,6 +2,8 @@
 
 This folder contains the desktop Electron app for Steam Achievement Manager.
 
+This app is Windows desktop only. Opening the renderer output in a plain browser is unsupported because the UI depends on the Electron preload bridge.
+
 ## What This App Runs
 
 - Electron main process: `electron/main`
@@ -107,8 +109,21 @@ npm run package
 This runs:
 
 - `npm run build:service` -> builds `SAM.Service` to `../upload/net48`
+- `npm run clean:dist`
 - `npm run build`
 - `electron-builder`
+
+Packaging outputs:
+
+- `electron/dist/Steam Achievement Manager Setup <version>.exe`
+- `electron/dist/latest.yml`
+
+## Releases and Updates
+
+- Packaged builds check GitHub Releases for updates automatically on app launch.
+- Tags matching `v*` trigger `.github/workflows/release.yml`, which publishes the installer and `latest.yml`.
+- `.github/workflows/package-smoke.yml` validates packaging on clean Windows CI runners.
+- Browser-hosted and PWA deployments are not supported release targets.
 
 ## Troubleshooting
 

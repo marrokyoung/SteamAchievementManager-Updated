@@ -16,6 +16,14 @@ vi.mock('@/components/ui/use-toast', () => ({
   toast: vi.fn(),
 }))
 
+vi.mock('@/hooks/useAutoUpdate', () => ({
+  useAutoUpdate: vi.fn(),
+}))
+
+vi.mock('@/lib/electronBridge', () => ({
+  getElectronBridge: () => (window as any).electron,
+}))
+
 function LocationProbe() {
   const location = useLocation()
   return <div data-testid="pathname">{location.pathname}</div>
@@ -181,20 +189,36 @@ describe('Layout back navigation', () => {
     expect(screen.queryByText('Unsaved Changes')).not.toBeInTheDocument()
   })
 
-  it('navigates to picker without restart when bridge is missing', async () => {
-    delete (window as any).electron.restartServiceNeutral
+  it('shows generic error and navigates to picker when a bridge method disappears at runtime', async () => {
+    // Bridge was valid at mount (useAutoUpdate validated and cached it).
+    // Deleting a method after mount simulates a runtime failure, not a
+    // missing-bridge scenario — so the generic error handler fires.
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    renderLayout({
-      initialEntries: ['/manager/730'],
-      hasUnsavedChanges: false,
-    })
+    try {
+      renderLayout({
+        initialEntries: ['/manager/730'],
+        hasUnsavedChanges: false,
+      })
 
-    fireEvent.click(getBackButton())
+      // Remove method AFTER the bridge was cached at mount
+      delete (window as any).electron.restartServiceNeutral
 
-    await waitFor(() => {
-      expect(screen.getByTestId('pathname')).toHaveTextContent('/')
-    })
-    expect(updateAPIConfig).not.toHaveBeenCalled()
+      fireEvent.click(getBackButton())
+
+      await waitFor(() => {
+        expect(screen.getByTestId('pathname')).toHaveTextContent('/')
+      })
+      expect(updateAPIConfig).not.toHaveBeenCalled()
+      expect(errorSpy).toHaveBeenCalledWith('Failed to restart service:', expect.any(TypeError))
+      expect(toast).toHaveBeenCalledWith({
+        title: 'Warning',
+        description: 'Service restart failed. Navigating to picker anyway.',
+        variant: 'destructive',
+      })
+    } finally {
+      errorSpy.mockRestore()
+    }
   })
 
   it('shows destructive toast and navigates to picker when restart fails', async () => {

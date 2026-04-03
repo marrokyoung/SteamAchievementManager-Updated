@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.28803.156
@@ -8,6 +8,8 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SAM.Schema", "SAM.Schema\SAM.Schema.csproj", "{7640DE31-E54E-45F9-9CF0-8DF3A3EA30FC}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SAM.Service", "SAM.Service\SAM.Service.csproj", "{A1B2C3D4-E5F6-4A5B-8C7D-9E0F1A2B3C4D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SAM.Service.Tests", "SAM.Service.Tests\SAM.Service.Tests.csproj", "{FCFF3ECF-ACA4-43BC-9B80-C394F1197E9A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -27,6 +29,10 @@ Global
 		{A1B2C3D4-E5F6-4A5B-8C7D-9E0F1A2B3C4D}.Debug|x86.Build.0 = Debug|x86
 		{A1B2C3D4-E5F6-4A5B-8C7D-9E0F1A2B3C4D}.Release|x86.ActiveCfg = Release|x86
 		{A1B2C3D4-E5F6-4A5B-8C7D-9E0F1A2B3C4D}.Release|x86.Build.0 = Release|x86
+		{FCFF3ECF-ACA4-43BC-9B80-C394F1197E9A}.Debug|x86.ActiveCfg = Debug|x86
+		{FCFF3ECF-ACA4-43BC-9B80-C394F1197E9A}.Debug|x86.Build.0 = Debug|x86
+		{FCFF3ECF-ACA4-43BC-9B80-C394F1197E9A}.Release|x86.ActiveCfg = Release|x86
+		{FCFF3ECF-ACA4-43BC-9B80-C394F1197E9A}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

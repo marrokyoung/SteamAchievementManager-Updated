@@ -142,6 +142,12 @@
         background: rgba(255, 255, 255, 0.04);
       }
 
+      .button[aria-disabled="true"] {
+        cursor: progress;
+        opacity: 0.82;
+        pointer-events: none;
+      }
+
       .meta {
         display: grid;
         gap: 16px;
@@ -213,6 +219,12 @@
         text-align: center;
       }
 
+      .download-note {
+        margin: 12px 0 0;
+        color: rgba(173, 199, 216, 0.88);
+        font-size: 0.92rem;
+      }
+
       @media (max-width: 860px) {
         .hero-inner,
         .grid {
@@ -238,10 +250,12 @@
             </p>
             <div class="actions">
               <a
+                id="download-button"
                 class="button button-primary"
                 href="https://github.com/marrokyoung/SteamAchievementManager-Updated/releases/latest"
+                aria-disabled="true"
               >
-                Download Latest Release
+                Preparing Download...
               </a>
               <a
                 class="button button-secondary"
@@ -250,6 +264,9 @@
                 View Source
               </a>
             </div>
+            <p id="download-note" class="download-note">
+              Resolving the newest Windows installer from GitHub Releases.
+            </p>
           </div>
 
           <div class="meta">
@@ -317,5 +334,46 @@
         before use.
       </p>
     </main>
+    <script>
+      const repo = "marrokyoung/SteamAchievementManager-Updated";
+      const releasesUrl = `https://github.com/${repo}/releases/latest`;
+      const releaseApiUrl = `https://api.github.com/repos/${repo}/releases/latest`;
+      const downloadButton = document.getElementById("download-button");
+      const downloadNote = document.getElementById("download-note");
+
+      async function wireLatestInstallerDownload() {
+        try {
+          const response = await fetch(releaseApiUrl, {
+            headers: {
+              Accept: "application/vnd.github+json",
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error(`GitHub API returned ${response.status}`);
+          }
+
+          const release = await response.json();
+          const installer = release.assets.find((asset) => asset.name.toLowerCase().endsWith(".exe"));
+
+          if (!installer) {
+            throw new Error("No installer asset found on the latest release.");
+          }
+
+          downloadButton.href = installer.browser_download_url;
+          downloadButton.textContent = "Download Windows Installer";
+          downloadButton.removeAttribute("aria-disabled");
+          downloadNote.textContent = `Latest release: ${release.tag_name}`;
+        } catch (error) {
+          downloadButton.href = releasesUrl;
+          downloadButton.textContent = "Open Latest Release";
+          downloadButton.removeAttribute("aria-disabled");
+          downloadNote.textContent = "Direct download is unavailable right now. Open the release page instead.";
+          console.error(error);
+        }
+      }
+
+      wireLatestInstallerDownload();
+    </script>
   </body>
 </html>

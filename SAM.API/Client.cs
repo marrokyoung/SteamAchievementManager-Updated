@@ -78,9 +78,15 @@ namespace SAM.API
             }
 
             SteamUtils = SteamClient.GetSteamUtils004(_Pipe);
-            if (appId > 0 && SteamUtils.GetAppId() != (uint)appId)
+            if (appId > 0)
             {
-                throw new ClientInitializeException(ClientInitializeFailure.AppIdMismatch, "appID mismatch");
+                uint actualAppId = SteamUtils.GetAppId();
+                if (actualAppId != (uint)appId)
+                {
+                    SecurityLogger.Log(LogLevel.Warning, LogContext.Init,
+                        $"AppID mismatch detected: requested={appId}, actual={actualAppId}");
+                    throw new ClientInitializeException(ClientInitializeFailure.AppIdMismatch, "appID mismatch");
+                }
             }
 
             SteamUser = SteamClient.GetSteamUser012(_User, _Pipe);

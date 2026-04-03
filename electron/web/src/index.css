@@ -1,0 +1,234 @@
+@import "tailwindcss";
+
+@theme {
+  /* Dark purple/black palette used for both default and "dark" */
+  --color-background: 248 39% 6%;
+  --color-foreground: 210 20% 96%;
+  --color-card: 247 42% 10%;
+  --color-card-foreground: 210 20% 96%;
+  --color-popover: 247 42% 12%;
+  --color-popover-foreground: 210 20% 96%;
+  --color-primary: 270 70% 64%;
+  --color-primary-foreground: 0 0% 98%;
+  --color-secondary: 247 32% 16%;
+  --color-secondary-foreground: 210 20% 94%;
+  --color-muted: 248 30% 18%;
+  --color-muted-foreground: 216 14% 80%;
+  --color-accent: 276 68% 55%;
+  --color-accent-foreground: 0 0% 98%;
+  --color-destructive: 0 62.8% 30.6%;
+  --color-destructive-foreground: 0 0% 98%;
+  --color-border: 263 45% 28%;
+  --color-input: 263 45% 28%;
+  --color-ring: 277 68% 58%;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --color-background: 248 39% 6%;
+  --color-foreground: 210 20% 96%;
+  --color-card: 247 42% 10%;
+  --color-card-foreground: 210 20% 96%;
+  --color-popover: 247 42% 12%;
+  --color-popover-foreground: 210 20% 96%;
+  --color-primary: 270 70% 64%;
+  --color-primary-foreground: 0 0% 98%;
+  --color-secondary: 247 32% 16%;
+  --color-secondary-foreground: 210 20% 94%;
+  --color-muted: 248 30% 18%;
+  --color-muted-foreground: 216 14% 80%;
+  --color-accent: 276 68% 55%;
+  --color-accent-foreground: 0 0% 98%;
+  --color-destructive: 0 62.8% 30.6%;
+  --color-destructive-foreground: 0 0% 98%;
+  --color-border: 263 45% 28%;
+  --color-input: 263 45% 28%;
+  --color-ring: 277 68% 58%;
+  --radius: 0.75rem;
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--color-border));
+  }
+}
+
+/* ── Scrollbar tokens ── */
+:root {
+  --scrollbar-size: 8px;
+  --scrollbar-track: rgba(255, 255, 255, 0.06);
+  --scrollbar-thumb: rgba(168, 130, 255, 0.35);
+  --scrollbar-thumb-hover: rgba(168, 130, 255, 0.55);
+  --scrollbar-thumb-active: rgba(168, 130, 255, 0.7);
+  --scrollbar-radius: 9999px;
+}
+
+/* ── Pill scrollbar – Chromium ── */
+.sam-scrollbar::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+.sam-scrollbar::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: var(--scrollbar-radius);
+}
+.sam-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--scrollbar-radius);
+}
+.sam-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+.sam-scrollbar::-webkit-scrollbar-thumb:active {
+  background: var(--scrollbar-thumb-active);
+}
+
+/* ── Pill scrollbar – Firefox ── */
+.sam-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* ── Shared surface tokens ── */
+:root {
+  /* Popup / overlay surface */
+  --surface-popup-bg: rgba(11, 9, 22, 0.95);
+  --surface-popup-border: rgba(255, 255, 255, 0.15);
+  --surface-popup-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+
+  /* Glass panel surface */
+  --surface-glass-bg: rgba(255, 255, 255, 0.05);
+  --surface-glass-border: rgba(255, 255, 255, 0.1);
+  --surface-glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+
+  /* Row card surface */
+  --surface-row-from: #221239;
+  --surface-row-via: #140d26;
+  --surface-row-to: #0c0818;
+  --surface-row-border: rgba(255, 255, 255, 0.1);
+  --surface-row-shadow: 0 10px 35px rgba(0, 0, 0, 0.4);
+
+  /* Row card modified state */
+  --surface-row-mod-from: #2b1a4a;
+  --surface-row-mod-via: #1b1235;
+  --surface-row-mod-to: #120b24;
+
+  /* Accent tokens */
+  --accent-glow: rgba(168, 85, 247, 0.25);
+  --accent-glow-shadow: 0 0 20px rgba(168, 85, 247, 0.25);
+  --accent-focus-ring: rgba(140, 97, 255, 0.65);
+  --accent-hover-shadow: 0 12px 32px rgba(120, 60, 255, 0.45);
+
+  /* Button gradients */
+  --btn-primary-from: #7c3aed;
+  --btn-primary-via: #8b5cf6;
+  --btn-primary-to: #6366f1;
+}
+
+/* ── Shared surface utilities ── */
+/* Placed in @layer components so Tailwind utilities can override them */
+@layer components {
+  /* Glass panel – dialogs, search bars, empty states */
+  .sam-glass-panel {
+    border: 1px solid var(--surface-glass-border);
+    background: var(--surface-glass-bg);
+    box-shadow: var(--surface-glass-shadow);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+  }
+
+  /* Popup surface – dropdowns, tooltips */
+  .sam-popup-surface {
+    border: 1px solid var(--surface-popup-border);
+    background: var(--surface-popup-bg);
+    box-shadow: var(--surface-popup-shadow);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+  }
+
+  /* Row card – achievement & stat rows */
+  .sam-row-card {
+    border-radius: 0.75rem;
+    border: 1px solid var(--surface-row-border);
+    background: linear-gradient(to bottom right, var(--surface-row-from), var(--surface-row-via), var(--surface-row-to));
+    box-shadow: var(--surface-row-shadow);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  }
+  .sam-row-card.sam-row-modified {
+    border-color: hsl(270 70% 64% / 0.5);
+    box-shadow: var(--accent-glow-shadow);
+    background: linear-gradient(to bottom right, var(--surface-row-mod-from), var(--surface-row-mod-via), var(--surface-row-mod-to));
+  }
+
+  /* Status badge base */
+  .sam-badge {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 0.375rem;
+    border-width: 1px;
+    flex-shrink: 0;
+  }
+  .sam-badge-modified {
+    background: hsl(270 70% 64% / 0.15);
+    color: hsl(270 70% 64%);
+    border-color: hsl(270 70% 64% / 0.3);
+  }
+  .sam-badge-warning {
+    background: rgba(245, 158, 11, 0.2);
+    color: rgb(252, 211, 77);
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+  .sam-badge-error {
+    background: rgba(239, 68, 68, 0.2);
+    color: rgb(248, 113, 113);
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+  .sam-badge-protected {
+    background: rgba(239, 68, 68, 0.2);
+    color: rgb(248, 113, 113);
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+  .sam-badge-raw-id {
+    background: rgba(245, 158, 11, 0.2);
+    color: rgb(252, 211, 77);
+    border-color: rgba(251, 191, 36, 0.3);
+  }
+  .sam-badge-neutral {
+    background: rgba(255, 255, 255, 0.05);
+    color: hsl(216 14% 80%);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+  .sam-badge-accent {
+    background: hsl(270 70% 64% / 0.15);
+    color: hsl(270 70% 64%);
+    border-color: hsl(270 70% 64% / 0.3);
+  }
+}
+
+body {
+  background-color: hsl(var(--color-background));
+  background-image:
+    radial-gradient(circle at 10% 20%, rgba(116, 66, 255, 0.3), transparent 32%),
+    radial-gradient(circle at 80% 0%, rgba(81, 0, 149, 0.28), transparent 30%),
+    radial-gradient(circle at 70% 70%, rgba(0, 201, 255, 0.18), transparent 32%),
+    linear-gradient(135deg, #05030f 0%, #0c0621 45%, #05030f 100%);
+  color: hsl(var(--color-foreground));
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 30% 30%, rgba(141, 92, 255, 0.16), transparent 35%),
+              radial-gradient(circle at 80% 40%, rgba(49, 0, 98, 0.2), transparent 40%),
+              radial-gradient(circle at 40% 80%, rgba(38, 143, 255, 0.14), transparent 40%);
+  filter: blur(50px);
+  pointer-events: none;
+  z-index: 0;
+}

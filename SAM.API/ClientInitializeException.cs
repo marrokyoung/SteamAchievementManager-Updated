@@ -43,5 +43,38 @@ namespace SAM.API
         {
             this.Failure = failure;
         }
+
+        /// <summary>
+        /// Gets the error code string for this initialization failure
+        /// </summary>
+        public string GetErrorCode() => Failure switch
+        {
+            ClientInitializeFailure.AppIdMismatch => "app_id_mismatch",
+            ClientInitializeFailure.GetInstallPath => "steam_install_path_failed",
+            ClientInitializeFailure.Load => "steam_load_failed",
+            ClientInitializeFailure.CreateSteamClient => "steam_client_creation_failed",
+            ClientInitializeFailure.CreateSteamPipe => "steam_pipe_creation_failed",
+            ClientInitializeFailure.ConnectToGlobalUser => "steam_connect_failed",
+            _ => "steam_initialization_failed"
+        };
+
+        /// <summary>
+        /// Gets the appropriate HTTP status code for this failure
+        /// </summary>
+        public int GetHttpStatusCode() => Failure switch
+        {
+            ClientInitializeFailure.AppIdMismatch => 409,  // Conflict - recoverable
+            ClientInitializeFailure.ConnectToGlobalUser => 503,  // Steam not running
+            ClientInitializeFailure.GetInstallPath => 503,  // Steam not installed
+            ClientInitializeFailure.Load => 503,  // Steam not available
+            ClientInitializeFailure.CreateSteamClient => 503,  // Steam not available
+            ClientInitializeFailure.CreateSteamPipe => 503,  // Steam not available
+            _ => 500  // Internal server error
+        };
+
+        /// <summary>
+        /// Returns true only if this failure can be recovered by disposing and retrying
+        /// </summary>
+        public bool IsRecoverable() => Failure == ClientInitializeFailure.AppIdMismatch;
     }
 }

@@ -392,6 +392,18 @@ FodyWeavers.xsd
 
 # Claude Codebase Analysis Files
 CLAUDE.md
+notes.md
+
+# Planning files
+IMPROVEMENT_AUDIT_2026-03-10.md
 
 # Ignore nul file
 nul
+
+# Electron build artifacts
+electron/dist/
+electron/dist-electron/
+electron/.vite/
+
+# Local dotnet CLI state
+.dotnet/

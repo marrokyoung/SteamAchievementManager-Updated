@@ -1,12 +1,11 @@
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using SAM.API;
 
 namespace SAM.Service.Core
 {
-    public class SteamClientManager : IDisposable
+    public class SteamClientManager : ISteamClientManager, IDisposable
     {
         private readonly object _lock = new();
         private readonly CancellationTokenSource _pollerCancellation;
@@ -147,19 +146,40 @@ namespace SAM.Service.Core
         }
 
         /// <summary>
-        /// Get current client (throws if not initialized)
+        /// Get current client as facade (throws if not initialized)
         /// </summary>
-        public Client GetClient()
+        public ISteamClientFacade GetClient()
         {
             lock (_lock)
             {
-                if (_currentClient == null)
-                {
-                    throw new InvalidOperationException(
-                        "Steam client not initialized. Call /init first.");
-                }
-                return _currentClient;
+                return new SteamClientFacade(GetClientOrThrow());
             }
+        }
+
+        /// <summary>
+        /// Returns the raw API.Client for operations that need the full client
+        /// (e.g., GameListCache). Prefer GetClient() for testable code paths.
+        /// Thread-safe: acquires _lock to prevent observing transient null during re-initialization.
+        /// </summary>
+        public Client GetRawClient()
+        {
+            lock (_lock)
+            {
+                return GetClientOrThrow();
+            }
+        }
+
+        /// <summary>
+        /// Unlocked accessor - callers must already hold _lock or call a locked public method.
+        /// </summary>
+        private Client GetClientOrThrow()
+        {
+            if (_currentClient == null)
+            {
+                throw new InvalidOperationException(
+                    "Steam client not initialized. Call /init first.");
+            }
+            return _currentClient;
         }
 
         /// <summary>
@@ -172,7 +192,7 @@ namespace SAM.Service.Core
 
             lock (_lock)
             {
-                var client = GetClient();
+                var client = GetClientOrThrow();
 
                 // Create new TaskCompletionSource for this request
                 tcs = new TaskCompletionSource<API.Types.UserStatsReceived>();
@@ -222,7 +242,7 @@ namespace SAM.Service.Core
             {
                 lock (_lock)
                 {
-                    var client = GetClient();
+                    var client = GetClientOrThrow();
                     return SchemaLoader.LoadSchema(appId, client);
                 }
             });

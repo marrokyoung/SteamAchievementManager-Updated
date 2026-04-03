@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -13,7 +12,7 @@ namespace SAM.Service.Controllers
     [RoutePrefix("api")]
     public class SteamController : ApiController
     {
-        private SteamClientManager ClientManager => ServiceContext.ClientManager;
+        private ISteamClientManager ClientManager => ServiceContext.ClientManager;
         private GameListCache GameListCache => ServiceContext.GameListCache;
 
         /// <summary>
@@ -47,7 +46,7 @@ namespace SAM.Service.Controllers
                 ClientManager.InitializeForApp(request.AppId);
 
                 var client = ClientManager.GetClient();
-                var gameName = client.SteamApps001.GetAppData((uint)request.AppId, "name");
+                var gameName = client.GetAppName((uint)request.AppId);
 
                 API.SecurityLogger.Log(API.LogLevel.Info, API.LogContext.HTTP,
                     $"Successfully initialized for AppId {request.AppId}");
@@ -103,7 +102,7 @@ namespace SAM.Service.Controllers
                 // In forced mode, skip AppId 0 init and reuse existing client
                 if (ServiceContext.ForcedAppId != null)
                 {
-                    var client = ClientManager.GetClient();
+                    var client = ClientManager.GetRawClient();
                     var games = await Task.Run(() => GameListCache.GetGames(client, includeUnowned, refresh));
                     return Ok(games);
                 }
@@ -111,14 +110,14 @@ namespace SAM.Service.Controllers
                 // Initialize with AppId 0 (neutral client) if not already initialized
                 try
                 {
-                    ClientManager.GetClient();
+                    ClientManager.GetRawClient();
                 }
                 catch (InvalidOperationException)
                 {
                     ClientManager.InitializeForApp(0);
                 }
 
-                var client2 = ClientManager.GetClient();
+                var client2 = ClientManager.GetRawClient();
                 var games2 = await Task.Run(() => GameListCache.GetGames(client2, includeUnowned, refresh));
 
                 return Ok(games2);
@@ -158,7 +157,7 @@ namespace SAM.Service.Controllers
                 ClientManager.InitializeForApp(appId);
 
                 var client = ClientManager.GetClient();
-                var steamId = client.SteamUser.GetSteamId();
+                var steamId = client.GetSteamId();
 
                 // Request stats asynchronously
                 var statsResult = await ClientManager.RequestUserStatsAsync(steamId);
@@ -179,7 +178,7 @@ namespace SAM.Service.Controllers
                 // Build response with current values
                 var achievements = schema.Achievements.Select(def =>
                 {
-                    client.SteamUserStats.GetAchievementAndUnlockTime(
+                    client.GetAchievementAndUnlockTime(
                         def.Id, out bool isAchieved, out uint unlockTime);
 
                     return new AchievementDto
@@ -203,12 +202,12 @@ namespace SAM.Service.Controllers
                     object value = null;
                     if (def.Type == "int")
                     {
-                        client.SteamUserStats.GetStatValue(def.Id, out int intVal);
+                        client.GetStatValue(def.Id, out int intVal);
                         value = intVal;
                     }
                     else
                     {
-                        client.SteamUserStats.GetStatValue(def.Id, out float floatVal);
+                        client.GetStatValue(def.Id, out float floatVal);
                         value = floatVal;
                     }
 
@@ -225,7 +224,7 @@ namespace SAM.Service.Controllers
                     };
                 }).ToList();
 
-                var gameName = client.SteamApps001.GetAppData((uint)appId, "name");
+                var gameName = client.GetAppName((uint)appId);
 
                 return Ok(new GameDataResponse
                 {
@@ -322,7 +321,7 @@ namespace SAM.Service.Controllers
                     }
 
                     // Apply update
-                    if (!client.SteamUserStats.SetAchievement(update.Id, update.Unlocked))
+                    if (!client.SetAchievement(update.Id, update.Unlocked))
                     {
                         return InternalServerError(new Exception(
                             $"Failed to set achievement '{update.Id}'"));
@@ -418,7 +417,7 @@ namespace SAM.Service.Controllers
                         }
 
                         // Get current value for increment-only check
-                        client.SteamUserStats.GetStatValue(def.Id, out int currentValue);
+                        client.GetStatValue(def.Id, out int currentValue);
 
                         // Validate increment-only
                         if (def.IncrementOnly && newValue < currentValue)
@@ -446,7 +445,7 @@ namespace SAM.Service.Controllers
                                 $"Stat '{def.Id}' clamped to max: {maxValue}");
                         }
 
-                        if (!client.SteamUserStats.SetStatValue(def.Id, newValue))
+                        if (!client.SetStatValue(def.Id, newValue))
                         {
                             return InternalServerError(new Exception(
                                 $"Failed to set stat '{update.Id}'"));
@@ -471,7 +470,7 @@ namespace SAM.Service.Controllers
                         }
 
                         // Get current value for increment-only check
-                        client.SteamUserStats.GetStatValue(def.Id, out float currentValue);
+                        client.GetStatValue(def.Id, out float currentValue);
 
                         // Validate increment-only
                         if (def.IncrementOnly && newValue < currentValue)
@@ -499,7 +498,7 @@ namespace SAM.Service.Controllers
                                 $"Stat '{def.Id}' clamped to max: {maxValue}");
                         }
 
-                        if (!client.SteamUserStats.SetStatValue(def.Id, newValue))
+                        if (!client.SetStatValue(def.Id, newValue))
                         {
                             return InternalServerError(new Exception(
                                 $"Failed to set stat '{update.Id}'"));
@@ -556,7 +555,7 @@ namespace SAM.Service.Controllers
 
                 var client = ClientManager.GetClient();
 
-                if (!client.SteamUserStats.StoreStats())
+                if (!client.StoreStats())
                 {
                     return InternalServerError(new Exception("StoreStats failed"));
                 }
@@ -610,7 +609,7 @@ namespace SAM.Service.Controllers
 
                 bool achievementsToo = request?.AchievementsToo ?? false;
 
-                if (!client.SteamUserStats.ResetAllStats(achievementsToo))
+                if (!client.ResetAllStats(achievementsToo))
                 {
                     return InternalServerError(new Exception("ResetAllStats failed"));
                 }

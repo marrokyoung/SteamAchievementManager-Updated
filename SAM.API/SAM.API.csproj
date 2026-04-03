@@ -6,9 +6,9 @@
     <Copyright>Original base architecture by Gibbed 2019; modifications Copyright © 2026 marrokyoung</Copyright>
   </PropertyGroup>
   <PropertyGroup>
-    <Version>8.0.0</Version>
-    <AssemblyVersion>8.0.0.0</AssemblyVersion>
-    <FileVersion>8.0.0.0</FileVersion>
+    <Version>8.0.1</Version>
+    <AssemblyVersion>8.0.1.0</AssemblyVersion>
+    <FileVersion>8.0.1.0</FileVersion>
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationIcon>Pink.ico</ApplicationIcon>

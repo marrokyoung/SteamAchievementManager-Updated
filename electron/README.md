@@ -115,7 +115,7 @@ This runs:
 
 Packaging outputs:
 
-- `electron/dist/Steam Achievement Manager Setup <version>.exe`
+- `electron/dist/Steam-Achievement-Manager-Setup.exe`
 - `electron/dist/latest.yml`
 
 ## Releases and Updates

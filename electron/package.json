@@ -64,6 +64,7 @@
   "build": {
     "appId": "com.steam.achievementmanager",
     "productName": "Steam Achievement Manager",
+    "artifactName": "Steam-Achievement-Manager-Setup.${ext}",
     "publish": {
       "provider": "github",
       "owner": "marrokyoung",

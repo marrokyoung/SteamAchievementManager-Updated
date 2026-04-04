@@ -1,8 +1,8 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { spawn, ChildProcess } from 'child_process'
 import { randomBytes } from 'crypto'
+import fs from 'fs'
 import path from 'path'
-import { fileURLToPath } from 'url'
 
 // electron-updater is CJS — use a lazy dynamic import so the ESM main
 // process doesn't blow up at module-evaluation time.

@@ -16,8 +16,23 @@ async function getAutoUpdater(): Promise<AutoUpdater> {
   return _autoUpdater
 }
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+const startupLogPath = path.join(app.getPath('userData'), 'sam-startup.log')
+
+function logStartup(message: string, error?: unknown) {
+  const details = error instanceof Error
+    ? `${error.message}\n${error.stack ?? ''}`
+    : error !== undefined
+      ? String(error)
+      : ''
+  const line = `[${new Date().toISOString()}] ${message}${details ? `\n${details}` : ''}\n`
+  try {
+    fs.appendFileSync(startupLogPath, line, 'utf8')
+  } catch {
+    // Best-effort logging only.
+  }
+}
+
+logStartup('main module loaded')
 
 let mainWindow: BrowserWindow | null = null
 let serviceProcess: ChildProcess | null = null
@@ -34,7 +49,24 @@ const SERVICE_BASE_URL = envBaseUrl && envBaseUrl.trim().length > 0
 const MAX_HEALTH_ATTEMPTS = 30
 const HEALTH_CHECK_INTERVAL = 1000
 
+function getDevServicePath() {
+  return path.resolve(process.cwd(), '..', 'bin', 'net48', 'SAM.Service.exe')
+}
+
+function getRendererIndexPath() {
+  return app.isPackaged
+    ? path.join(app.getAppPath(), 'dist', 'index.html')
+    : path.resolve(process.cwd(), 'dist', 'index.html')
+}
+
+function getPreloadPath() {
+  return app.isPackaged
+    ? path.join(app.getAppPath(), 'dist-electron', 'preload.cjs')
+    : path.resolve(process.cwd(), 'dist-electron', 'preload.cjs')
+}
+
 async function startService(): Promise<void> {
+  logStartup('startService called')
   console.log('Starting SAM.Service...')
 
   // Generate cryptographically random token
@@ -46,9 +78,10 @@ async function startService(): Promise<void> {
   // We need to go up 2 levels to electron/, then up 1 more to repo root
   const servicePath = app.isPackaged
     ? path.join(process.resourcesPath, 'sam-service', 'SAM.Service.exe')
-    : path.resolve(__dirname, '..', '..', 'bin', 'net48', 'SAM.Service.exe')
+    : getDevServicePath()
 
   console.log(`Service path: ${servicePath}`)
+  logStartup(`resolved service path: ${servicePath}`)
 
   // Spawn service with token
   serviceProcess = spawn(servicePath, [], {
@@ -62,10 +95,12 @@ async function startService(): Promise<void> {
 
   serviceProcess.on('error', (err) => {
     console.error('Failed to start SAM.Service:', err)
+    logStartup('service process error', err)
   })
 
   serviceProcess.on('exit', (code) => {
     console.log(`SAM.Service exited with code ${code}`)
+    logStartup(`service process exited with code ${code}`)
     serviceProcess = null
   })
 
@@ -116,7 +151,7 @@ async function restartServiceWithAppId(appId: number): Promise<void> {
 
   const servicePath = app.isPackaged
     ? path.join(process.resourcesPath, 'sam-service', 'SAM.Service.exe')
-    : path.resolve(__dirname, '..', '..', 'bin', 'net48', 'SAM.Service.exe')
+    : getDevServicePath()
 
   console.log(`Service path: ${servicePath}`)
 
@@ -166,12 +201,13 @@ async function restartServiceNeutral(): Promise<void> {
 }
 
 async function createWindow() {
+  logStartup('createWindow called')
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     frame: false,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: getPreloadPath(),
       contextIsolation: true,
       nodeIntegration: false
     }
@@ -179,13 +215,25 @@ async function createWindow() {
 
   // Load the app
   if (process.env.VITE_DEV_SERVER_URL) {
+    logStartup('loading Vite dev server URL')
     await mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
     mainWindow.webContents.openDevTools()
   } else {
-    await mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'))
+    const rendererIndexPath = getRendererIndexPath()
+    logStartup(`loading packaged index: ${rendererIndexPath}`)
+    await mainWindow.loadFile(rendererIndexPath)
   }
 
+  mainWindow.webContents.on('did-fail-load', (_event, code, description, validatedUrl) => {
+    logStartup(`webContents did-fail-load code=${code} url=${validatedUrl} description=${description}`)
+  })
+
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    logStartup(`render-process-gone reason=${details.reason} exitCode=${details.exitCode}`)
+  })
+
   mainWindow.on('closed', () => {
+    logStartup('main window closed')
     mainWindow = null
   })
 }
@@ -328,16 +376,22 @@ ipcMain.handle('install-update', async () => {
 // App lifecycle
 app.whenReady().then(async () => {
   try {
+    logStartup('app.whenReady entered')
     await startService()
+    logStartup('startService completed')
     await setupAutoUpdater()
+    logStartup('setupAutoUpdater completed')
     await createWindow()
+    logStartup('createWindow completed')
   } catch (err) {
     console.error('Failed to start application:', err)
+    logStartup('application startup failed', err)
     app.quit()
   }
 })
 
 app.on('window-all-closed', async () => {
+  logStartup('window-all-closed received')
   await stopService()
   app.quit()
 })
@@ -349,8 +403,17 @@ app.on('activate', () => {
 })
 
 process.on('exit', () => {
+  logStartup('process exit received')
   // Note: Can't use async here, but stopService will still run synchronously
   if (serviceProcess) {
     serviceProcess.kill()
   }
+})
+
+process.on('uncaughtException', (error) => {
+  logStartup('uncaughtException', error)
+})
+
+process.on('unhandledRejection', (reason) => {
+  logStartup('unhandledRejection', reason)
 })

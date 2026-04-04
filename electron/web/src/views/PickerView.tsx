@@ -155,7 +155,7 @@ export default function PickerView() {
       <div className="mb-8 rounded-2xl sam-glass-panel p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/70" />
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground/70 z-10 pointer-events-none" />
             <Input
               type="text"
               placeholder="Search games..."

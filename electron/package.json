@@ -1,14 +1,14 @@
 {
   "name": "steam-achievement-manager",
   "version": "8.0.1",
-  "main": "dist-electron/index.js",
-  "type": "module",
+  "main": "dist-electron/index.cjs",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && npm run build:electron-runtime",
+    "build:electron-runtime": "npx esbuild main/index.ts --bundle --platform=node --format=cjs --outfile=dist-electron/index.cjs --external:electron --external:electron-updater && npx esbuild preload/index.ts --bundle --platform=node --format=cjs --outfile=dist-electron/preload.cjs --external:electron",
     "test": "vitest",
     "test:run": "vitest run",
-    "clean:dist": "node -e \"const fs=require('fs');['dist','dist-electron'].forEach(d=>{if(fs.existsSync(d)){fs.rmSync(d,{recursive:true,force:true});console.log('Removed '+d)}})\"",
+    "clean:dist": "node -e \"const fs=require('fs');['dist','dist-electron','release'].forEach(d=>{if(fs.existsSync(d)){fs.rmSync(d,{recursive:true,force:true});console.log('Removed '+d)}})\"",
     "build:service": "dotnet build ../SAM.Service/SAM.Service.csproj -c Release -p:Platform=x86",
     "prepackage": "npm run build:service",
     "package": "npm run clean:dist && npm run build && electron-builder"
@@ -34,6 +34,7 @@
     "autoprefixer": "^10.4.22",
     "electron": "^39.8.6",
     "electron-builder": "^26.0.12",
+    "esbuild": "^0.25.12",
     "jsdom": "^28.1.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.0.0",
@@ -65,6 +66,9 @@
     "appId": "com.steam.achievementmanager",
     "productName": "Steam Achievement Manager",
     "artifactName": "Steam-Achievement-Manager-Setup.${ext}",
+    "directories": {
+      "output": "release"
+    },
     "publish": {
       "provider": "github",
       "owner": "marrokyoung",
@@ -85,6 +89,7 @@
         "to": "sam-service",
         "filter": [
           "SAM.Service.exe",
+          "*.config",
           "*.dll"
         ]
       }
@@ -92,6 +97,9 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
+      "!dist/*.exe",
+      "!dist/*.blockmap",
+      "!dist/latest.yml",
       "!**/*.ts",
       "!**/*.map"
     ]

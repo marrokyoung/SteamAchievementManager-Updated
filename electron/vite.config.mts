@@ -17,8 +17,8 @@ export default defineConfig({
             rollupOptions: {
               external: ['electron', 'electron-updater'],
               output: {
-                entryFileNames: 'index.js',
-                format: 'cjs'
+                entryFileNames: 'index.mjs',
+                format: 'es'
               }
             }
           }
@@ -36,7 +36,7 @@ export default defineConfig({
             rollupOptions: {
               external: ['electron'],
               output: {
-                entryFileNames: 'preload.js',
+                entryFileNames: 'preload.cjs',
                 format: 'cjs'
               }
             }

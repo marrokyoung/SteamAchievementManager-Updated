@@ -66,6 +66,9 @@
     "appId": "com.steam.achievementmanager",
     "productName": "Steam Achievement Manager",
     "artifactName": "Steam-Achievement-Manager-Setup.${ext}",
+    "directories": {
+      "output": "release"
+    },
     "publish": {
       "provider": "github",
       "owner": "marrokyoung",
@@ -86,6 +89,7 @@
         "to": "sam-service",
         "filter": [
           "SAM.Service.exe",
+          "*.config",
           "*.dll"
         ]
       }
@@ -93,6 +97,9 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
+      "!dist/*.exe",
+      "!dist/*.blockmap",
+      "!dist/latest.yml",
       "!**/*.ts",
       "!**/*.map"
     ]

@@ -55,5 +55,7 @@ jobs:
       - name: Verify installer and update metadata exist
         shell: bash
         run: |
-          ls -la dist/Steam-Achievement-Manager-Setup.exe
-          ls -la dist/latest.yml
+          ls -la release/Steam-Achievement-Manager-Setup.exe
+          ls -la release/Steam-Achievement-Manager-Setup.exe.blockmap
+          ls -la release/latest.yml
+          ls -la release/win-unpacked/resources/sam-service/SAM.Service.exe.config

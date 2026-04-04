@@ -40,16 +40,25 @@ jobs:
       - name: Build Electron app
         run: npm run build
 
-      - name: Package and publish to GitHub Releases
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Optional code signing (step 8+)
-          # CSC_LINK: ${{ secrets.CSC_LINK }}
-          # CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-        run: npx electron-builder --win --publish always
+      - name: Package release artifacts
+        # Optional code signing (step 8+)
+        # CSC_LINK: ${{ secrets.CSC_LINK }}
+        # CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: npx electron-builder --win --publish never
 
       - name: Verify release artifacts
         shell: bash
         run: |
-          ls -la dist/Steam-Achievement-Manager-Setup.exe
-          ls -la dist/latest.yml
+          ls -la release/Steam-Achievement-Manager-Setup.exe
+          ls -la release/Steam-Achievement-Manager-Setup.exe.blockmap
+          ls -la release/latest.yml
+          ls -la release/win-unpacked/resources/sam-service/SAM.Service.exe.config
+
+      - name: Publish verified release artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          fail_on_unmatched_files: true
+          files: |
+            electron/release/Steam-Achievement-Manager-Setup.exe
+            electron/release/Steam-Achievement-Manager-Setup.exe.blockmap
+            electron/release/latest.yml

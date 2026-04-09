@@ -65,6 +65,92 @@ function getPreloadPath() {
     : path.resolve(process.cwd(), 'dist-electron', 'preload.cjs')
 }
 
+function getServicePath() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'sam-service', 'SAM.Service.exe')
+    : getDevServicePath()
+}
+
+function pipeServiceOutput(stream: NodeJS.ReadableStream | null, label: 'stdout' | 'stderr') {
+  if (!stream) {
+    return
+  }
+
+  const readable = stream as NodeJS.ReadableStream & {
+    setEncoding: (encoding: BufferEncoding) => void
+  }
+
+  readable.setEncoding('utf8')
+  readable.on('data', (chunk: string | Buffer) => {
+    const text = String(chunk).trim()
+    if (!text) {
+      return
+    }
+
+    for (const line of text.split(/\r?\n/)) {
+      if (!line) {
+        continue
+      }
+
+      if (label === 'stderr') {
+        console.error(`[SAM.Service] ${line}`)
+      } else {
+        console.log(`[SAM.Service] ${line}`)
+      }
+      logStartup(`[service:${label}] ${line}`)
+    }
+  })
+}
+
+function spawnService(extraEnv: Record<string, string> = {}) {
+  const servicePath = getServicePath()
+
+  console.log(`Service path: ${servicePath}`)
+  logStartup(`resolved service path: ${servicePath}`)
+
+  const child = spawn(servicePath, [], {
+    env: {
+      ...process.env,
+      SAM_API_TOKEN: apiToken,
+      SAM_BASE_URL: SERVICE_BASE_URL,
+      ...extraEnv
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true
+  })
+
+  pipeServiceOutput(child.stdout, 'stdout')
+  pipeServiceOutput(child.stderr, 'stderr')
+
+  return child
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return String(error ?? 'Unknown error')
+}
+
+function formatUpdaterError(error: unknown): string {
+  const message = getErrorMessage(error)
+
+  if (/Cannot parse releases feed/i.test(message) || /unable to find latest version/i.test(message)) {
+    return 'Update metadata is invalid or missing for the latest published release.'
+  }
+
+  if (/latest\.yml/i.test(message) && /(not found|cannot find|404)/i.test(message)) {
+    return 'Update metadata file latest.yml was not found in the published release.'
+  }
+
+  if (message.includes('data:image/') || message.length > 300) {
+    return 'The update server returned invalid release metadata.'
+  }
+
+  return message
+}
+
 async function startService(): Promise<void> {
   logStartup('startService called')
   console.log('Starting SAM.Service...')
@@ -73,25 +159,7 @@ async function startService(): Promise<void> {
   apiToken = randomBytes(32).toString('hex')
   console.log('Generated API token')
 
-  // Locate SAM.Service.exe
-  // In development, the compiled file is at: electron/dist-electron/index.js
-  // We need to go up 2 levels to electron/, then up 1 more to repo root
-  const servicePath = app.isPackaged
-    ? path.join(process.resourcesPath, 'sam-service', 'SAM.Service.exe')
-    : getDevServicePath()
-
-  console.log(`Service path: ${servicePath}`)
-  logStartup(`resolved service path: ${servicePath}`)
-
-  // Spawn service with token
-  serviceProcess = spawn(servicePath, [], {
-    env: {
-      ...process.env,
-      SAM_API_TOKEN: apiToken,
-      SAM_BASE_URL: SERVICE_BASE_URL
-    },
-    stdio: 'inherit'
-  })
+  serviceProcess = spawnService()
 
   serviceProcess.on('error', (err) => {
     console.error('Failed to start SAM.Service:', err)
@@ -149,21 +217,8 @@ async function restartServiceWithAppId(appId: number): Promise<void> {
   apiToken = randomBytes(32).toString('hex')
   console.log('Generated new API token')
 
-  const servicePath = app.isPackaged
-    ? path.join(process.resourcesPath, 'sam-service', 'SAM.Service.exe')
-    : getDevServicePath()
-
-  console.log(`Service path: ${servicePath}`)
-
-  // Spawn with SAM_FORCE_APP_ID environment variable
-  serviceProcess = spawn(servicePath, [], {
-    env: {
-      ...process.env,
-      SAM_API_TOKEN: apiToken,
-      SAM_BASE_URL: SERVICE_BASE_URL,
-      SAM_FORCE_APP_ID: appId.toString()
-    },
-    stdio: 'inherit'
+  serviceProcess = spawnService({
+    SAM_FORCE_APP_ID: appId.toString()
   })
 
   let startupError: Error | null = null
@@ -343,7 +398,8 @@ async function setupAutoUpdater() {
 
   updater.on('error', (err) => {
     console.error('[updater] Error:', err.message)
-    mainWindow?.webContents.send('update-error', err.message)
+    logStartup('updater error', err)
+    mainWindow?.webContents.send('update-error', formatUpdaterError(err))
   })
 
   // Don't check eagerly here — the renderer triggers the first check
@@ -356,21 +412,30 @@ ipcMain.handle('check-for-updates', async () => {
     const updater = await getAutoUpdater()
     const result = await updater.checkForUpdates()
     return { available: !!result?.updateInfo }
-  } catch {
+  } catch (error) {
+    logStartup('check-for-updates failed', error)
     return { available: false }
   }
 })
 
 ipcMain.handle('download-update', async () => {
-  const updater = await getAutoUpdater()
-  await updater.downloadUpdate()
+  try {
+    const updater = await getAutoUpdater()
+    await updater.downloadUpdate()
+  } catch (error) {
+    throw new Error(formatUpdaterError(error))
+  }
 })
 
 ipcMain.handle('install-update', async () => {
-  // Stop the .NET service before quitting for install
-  await stopService()
-  const updater = await getAutoUpdater()
-  updater.quitAndInstall(false, true)
+  try {
+    // Stop the .NET service before quitting for install
+    await stopService()
+    const updater = await getAutoUpdater()
+    updater.quitAndInstall(false, true)
+  } catch (error) {
+    throw new Error(formatUpdaterError(error))
+  }
 })
 
 // App lifecycle

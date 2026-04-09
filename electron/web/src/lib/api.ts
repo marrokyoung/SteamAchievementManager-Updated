@@ -2,6 +2,17 @@ import { getElectronBridge } from '@/lib/electronBridge'
 
 let apiConfig: { baseUrl: string; token: string } | null = null
 
+export class SteamUnavailableError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SteamUnavailableError'
+  }
+}
+
+export function isSteamUnavailableError(error: unknown): boolean {
+  return error instanceof SteamUnavailableError
+}
+
 export async function initializeAPI() {
   if (!apiConfig) {
     apiConfig = await getElectronBridge().getConfig()
@@ -62,9 +73,9 @@ export async function apiClient<T>(
         if (errorCode === 'steam_client_creation_failed' ||
             errorCode === 'steam_pipe_creation_failed' ||
             errorCode === 'steam_connect_failed') {
-          throw new Error('Cannot connect to Steam. Please start Steam and try again.')
+          throw new SteamUnavailableError('Cannot connect to Steam. Please start Steam and try again.')
         }
-        throw new Error('Steam client is not running. Please start Steam and try again.')
+        throw new SteamUnavailableError('Steam client is not running. Please start Steam and try again.')
       default:
         throw new Error(message || `Request failed: ${response.status}`)
     }

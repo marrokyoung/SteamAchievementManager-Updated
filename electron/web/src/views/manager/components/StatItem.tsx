@@ -166,6 +166,11 @@ export function StatItem({
               Protected
             </span>
           )}
+          {stat.type === 'float' && (
+            <span className="sam-badge sam-badge-accent">
+              Decimal
+            </span>
+          )}
           {stat.incrementOnly && (
             <span className="sam-badge sam-badge-accent">
               Only Increases
@@ -173,7 +178,6 @@ export function StatItem({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Type: {stat.type}</span>
           {isModified && (
             <TooltipProvider delayDuration={300}>
               <Tooltip>

@@ -132,7 +132,11 @@ export default function PickerView() {
   // hidden content still participated in layout, causing scrollbar flicker
   // when TanStack Query toggled isLoading during recovery polling.
   const isConnecting = isLoading && !isFetched
-  const showOverlay = isConnecting || isWaitingForSteam || isRecovering
+  const hasGames = !!games && games.length > 0
+  // Only show the Steam-down overlay when we have no cached game data.
+  // When returning from a game manager, the service restarts briefly —
+  // suppress the overlay during that neutral window if we already have games.
+  const showOverlay = isConnecting || ((isWaitingForSteam || isRecovering) && !hasGames)
   const showErrorCard = !showOverlay && !!error
   const showContent = !showOverlay && !showErrorCard
 

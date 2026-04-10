@@ -9,7 +9,6 @@ import {
   useResetStats
 } from '@/hooks/useGameQueries'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
 import {
   Dialog,
   DialogContent,
@@ -159,10 +158,10 @@ export default function ManagerView() {
       stats.clearAll()
 
       toast({
-        title: 'Stats reset',
+        title: 'Progress reset',
         description: includeAchievements
-          ? 'Stats and achievements have been reset.'
-          : 'Stats have been reset to default values.',
+          ? 'Stats and achievements have been reset on Steam.'
+          : 'Stats have been reset to default values on Steam.',
         variant: 'default'
       })
 
@@ -248,31 +247,84 @@ export default function ManagerView() {
             )}
           </Button>
 
+          <Button
+            variant="outline"
+            onClick={() => {
+              achievements.clearAll()
+              stats.clearAll()
+              toast({
+                title: 'Edits discarded',
+                description: 'All unsaved changes have been reverted.',
+                variant: 'default'
+              })
+            }}
+            disabled={!hasChanges}
+          >
+            Discard Edits
+          </Button>
+
           <Dialog open={resetDialogOpen} onOpenChange={(open) => {
             setResetDialogOpen(open)
             if (!open) setIncludeAchievements(false)
           }}>
             <DialogTrigger asChild>
-              <Button variant="outline">Reset Stats</Button>
+              <Button variant="destructive">Reset Progress</Button>
             </DialogTrigger>
             <DialogContent className="sam-glass-panel">
               <DialogHeader>
-                <DialogTitle>Reset Statistics</DialogTitle>
+                <DialogTitle>Reset Progress on Steam</DialogTitle>
                 <DialogDescription>
-                  This will reset all statistics to their default values. This action cannot be
-                  undone.
+                  This will permanently reset your progress on Steam. This action cannot be undone.
                 </DialogDescription>
               </DialogHeader>
 
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="achievements"
-                  checked={includeAchievements}
-                  onCheckedChange={setIncludeAchievements}
-                />
-                <label htmlFor="achievements" className="text-sm cursor-pointer">
-                  Also reset achievements
-                </label>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">What would you like to reset?</p>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex items-center gap-3 w-full rounded-lg px-4 py-3 text-left transition-colors border',
+                      !includeAchievements
+                        ? 'border-[#8b5cf6] bg-[#8b5cf6]/10 text-foreground'
+                        : 'border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10'
+                    )}
+                    onClick={() => setIncludeAchievements(false)}
+                  >
+                    <div className={cn(
+                      'h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0',
+                      !includeAchievements ? 'border-[#8b5cf6]' : 'border-white/30'
+                    )}>
+                      {!includeAchievements && <div className="h-2 w-2 rounded-full bg-[#8b5cf6]" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Stats only</p>
+                      <p className="text-xs text-muted-foreground">Reset all statistics to their default values</p>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex items-center gap-3 w-full rounded-lg px-4 py-3 text-left transition-colors border',
+                      includeAchievements
+                        ? 'border-[#8b5cf6] bg-[#8b5cf6]/10 text-foreground'
+                        : 'border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10'
+                    )}
+                    onClick={() => setIncludeAchievements(true)}
+                  >
+                    <div className={cn(
+                      'h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0',
+                      includeAchievements ? 'border-[#8b5cf6]' : 'border-white/30'
+                    )}>
+                      {includeAchievements && <div className="h-2 w-2 rounded-full bg-[#8b5cf6]" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">Stats + achievements</p>
+                      <p className="text-xs text-muted-foreground">Reset statistics and lock all achievements</p>
+                    </div>
+                  </button>
+                </div>
               </div>
 
               <DialogFooter>

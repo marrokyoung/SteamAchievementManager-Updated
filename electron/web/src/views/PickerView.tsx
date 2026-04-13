@@ -185,7 +185,7 @@ export default function PickerView() {
                   try {
                     await forceRefresh()
                   } catch {
-                    refetch()
+                    await refetch()
                   } finally {
                     setIsRefreshing(false)
                   }

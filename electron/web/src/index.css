@@ -140,14 +140,15 @@
   /* Popup surface – dropdowns, tooltips
      No backdrop-filter: Chromium's blur invalidation rect extends beyond
      the element bounds on hover, producing visible artifacts on nearby
-     glass panels. A near-opaque gradient mimics the glass look instead. */
+     glass panels. A near-opaque gradient mimics the glass look instead.
+     Colors are hardcoded to match the --surface-glass-* tokens at 0.95 alpha. */
   .sam-popup-surface {
     border: 1px solid rgba(255, 255, 255, 0.12);
     background: linear-gradient(
       135deg,
-      rgba(40, 24, 72, 0.95),
-      rgba(22, 14, 44, 0.95),
-      rgba(14, 10, 30, 0.95)
+      rgba(40, 24, 72, 0.95),   /* ~--surface-glass-from */
+      rgba(22, 14, 44, 0.95),   /* ~--surface-glass-via */
+      rgba(14, 10, 30, 0.95)    /* ~--surface-glass-to */
     );
     box-shadow: var(--surface-glass-shadow),
                 inset 0 1px 0 rgba(255, 255, 255, 0.06);

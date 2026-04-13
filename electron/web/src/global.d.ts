@@ -24,6 +24,7 @@ export interface ElectronAPI {
   onUpdateDownloaded: (callback: () => void) => () => void
   onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void
   onUpdateError: (callback: (message: string) => void) => () => void
+  onConfigUpdated: (callback: (config: { baseUrl: string; token: string }) => void) => () => void
 }
 
 declare global {

@@ -428,12 +428,27 @@ ipcMain.handle('download-update', async () => {
 })
 
 ipcMain.handle('install-update', async () => {
+  let serviceStopped = false
   try {
-    // Stop the .NET service before quitting for install
-    await stopService()
+    // Resolve the updater before stopping the service so a failure here
+    // doesn't leave the app running without its backend.
     const updater = await getAutoUpdater()
+    await stopService()
+    serviceStopped = true
     updater.quitAndInstall(false, true)
   } catch (error) {
+    if (serviceStopped) {
+      // Service is down but install failed — restart the backend.
+      // startService() generates a new apiToken, so push it to the renderer
+      // to avoid 401s from the stale cached token.
+      try {
+        await startService()
+        mainWindow?.webContents.send('config-updated', {
+          baseUrl: SERVICE_BASE_URL,
+          token: apiToken
+        })
+      } catch { /* best-effort */ }
+    }
     throw new Error(formatUpdaterError(error))
   }
 })

@@ -9,7 +9,7 @@ export class SteamUnavailableError extends Error {
   }
 }
 
-export function isSteamUnavailableError(error: unknown): boolean {
+export function isSteamUnavailableError(error: unknown): error is SteamUnavailableError {
   return error instanceof SteamUnavailableError
 }
 
@@ -22,6 +22,14 @@ export async function initializeAPI() {
 
 export function updateAPIConfig(config: { baseUrl: string; token: string }) {
   apiConfig = config
+}
+
+// Listen for config pushes from main process (e.g. after service restart on
+// failed update install) so the renderer doesn't get stuck with a stale token.
+if (typeof window !== 'undefined' && window.electron?.onConfigUpdated) {
+  window.electron.onConfigUpdated((config) => {
+    apiConfig = config
+  })
 }
 
 export async function apiClient<T>(

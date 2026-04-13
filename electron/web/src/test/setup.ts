@@ -43,5 +43,6 @@ beforeEach(() => {
     onUpdateDownloaded: vi.fn().mockReturnValue(vi.fn()),
     onDownloadProgress: vi.fn().mockReturnValue(vi.fn()),
     onUpdateError: vi.fn().mockReturnValue(vi.fn()),
+    onConfigUpdated: vi.fn().mockReturnValue(vi.fn()),
   }
 })

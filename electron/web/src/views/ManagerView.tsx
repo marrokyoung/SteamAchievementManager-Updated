@@ -279,51 +279,61 @@ export default function ManagerView() {
               </DialogHeader>
 
               <div className="space-y-2">
-                <p className="text-sm font-medium text-foreground">What would you like to reset?</p>
-                <div className="flex flex-col gap-2">
-                  <button
-                    type="button"
-                    className={cn(
-                      'flex items-center gap-3 w-full rounded-lg px-4 py-3 text-left transition-colors border',
-                      !includeAchievements
-                        ? 'border-[#8b5cf6] bg-[#8b5cf6]/10 text-foreground'
-                        : 'border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10'
-                    )}
-                    onClick={() => setIncludeAchievements(false)}
-                  >
-                    <div className={cn(
-                      'h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0',
-                      !includeAchievements ? 'border-[#8b5cf6]' : 'border-white/30'
-                    )}>
-                      {!includeAchievements && <div className="h-2 w-2 rounded-full bg-[#8b5cf6]" />}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Stats only</p>
-                      <p className="text-xs text-muted-foreground">Reset all statistics to their default values</p>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    className={cn(
-                      'flex items-center gap-3 w-full rounded-lg px-4 py-3 text-left transition-colors border',
-                      includeAchievements
-                        ? 'border-[#8b5cf6] bg-[#8b5cf6]/10 text-foreground'
-                        : 'border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10'
-                    )}
-                    onClick={() => setIncludeAchievements(true)}
-                  >
-                    <div className={cn(
-                      'h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0',
-                      includeAchievements ? 'border-[#8b5cf6]' : 'border-white/30'
-                    )}>
-                      {includeAchievements && <div className="h-2 w-2 rounded-full bg-[#8b5cf6]" />}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium">Stats + achievements</p>
-                      <p className="text-xs text-muted-foreground">Reset statistics and lock all achievements</p>
-                    </div>
-                  </button>
+                <p id="reset-scope-label" className="text-sm font-medium text-foreground">What would you like to reset?</p>
+                <div
+                  role="radiogroup"
+                  aria-labelledby="reset-scope-label"
+                  className="flex flex-col gap-2"
+                >
+                  {([false, true] as const).map((value) => {
+                    const selected = includeAchievements === value
+                    const handleArrow = (e: React.KeyboardEvent<HTMLDivElement>) => {
+                      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                        e.preventDefault()
+                        setIncludeAchievements(prev => !prev)
+                        // Wrap: with two options, the other radio is always the
+                        // sibling. Use querySelectorAll on the group to avoid
+                        // e.target landing on a child element.
+                        const radios = e.currentTarget.parentElement?.querySelectorAll<HTMLElement>('[role="radio"]')
+                        if (radios) {
+                          const other = radios[value ? 0 : 1]
+                          other?.focus()
+                        }
+                      } else if (e.key === ' ' || e.key === 'Enter') {
+                        e.preventDefault()
+                        setIncludeAchievements(value)
+                      }
+                    }
+                    return (
+                      <div
+                        key={String(value)}
+                        role="radio"
+                        aria-checked={selected}
+                        tabIndex={selected ? 0 : -1}
+                        className={cn(
+                          'flex items-center gap-3 w-full rounded-lg px-4 py-3 text-left transition-colors border cursor-pointer',
+                          selected
+                            ? 'border-[#8b5cf6] bg-[#8b5cf6]/10 text-foreground'
+                            : 'border-white/10 bg-white/5 text-muted-foreground hover:bg-white/10'
+                        )}
+                        onClick={() => setIncludeAchievements(value)}
+                        onKeyDown={handleArrow}
+                      >
+                        <div className={cn(
+                          'h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0',
+                          selected ? 'border-[#8b5cf6]' : 'border-white/30'
+                        )}>
+                          {selected && <div className="h-2 w-2 rounded-full bg-[#8b5cf6]" />}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{value ? 'Stats + achievements' : 'Stats only'}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {value ? 'Reset statistics and lock all achievements' : 'Reset all statistics to their default values'}
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
 

@@ -40,6 +40,8 @@ export function useGames(includeUnowned = false) {
   //   stay   — until a forced refresh succeeds with libraryReady === true
   //   exit   — forced refresh succeeds with ready library, OR a non-Steam error occurs
   useEffect(() => {
+    let cancelled = false
+
     if (isWaitingForSteam) {
       setIsRecovering(true)
       forceRefreshFiredRef.current = false
@@ -62,6 +64,9 @@ export function useGames(includeUnowned = false) {
       forceRefreshFiredRef.current = true
       apiClient<GameListResponse>(`/api/games?includeUnowned=${includeUnowned}&refresh=true`)
         .then((response) => {
+          // Effect was invalidated while request was in flight — re-arm so
+          // the next effect run can fire a fresh forced refresh.
+          if (cancelled) { forceRefreshFiredRef.current = false; return }
           queryClient.setQueryData(['games', includeUnowned], response)
           if (response.libraryReady) {
             setIsRecovering(false)
@@ -71,10 +76,12 @@ export function useGames(includeUnowned = false) {
           }
         })
         .catch(() => {
-          // Forced refresh failed — allow polling to fire it again next cycle
+          // Re-arm regardless of cancellation so recovery isn't stuck
           forceRefreshFiredRef.current = false
         })
     }
+
+    return () => { cancelled = true }
   }, [isWaitingForSteam, isRecovering, query.error, query.data, libraryReady, includeUnowned, queryClient])
 
   // Manual force-refresh: bypasses the server cache then updates query data directly

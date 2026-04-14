@@ -49,8 +49,10 @@ namespace SAM.Service.Core
                     forceRefresh = true;
                 }
 
-                // Serve from cache if valid
-                if (!forceRefresh && entry.Games != null && !isStale)
+                // Serve from cache if valid. Owned-only results must still be
+                // stabilized; if stabilization was reset, fetch a fresh scan.
+                if (!forceRefresh && entry.Games != null && !isStale &&
+                    (includeUnowned || _stabilized))
                 {
                     return new GameListResponse { Games = entry.Games, LibraryReady = true };
                 }
@@ -80,17 +82,33 @@ namespace SAM.Service.Core
                     return new GameListResponse { Games = result, LibraryReady = false };
                 }
 
-                // If already stabilized (e.g. force refresh after initial load), cache immediately.
-                if (_stabilized)
-                {
-                    entry.Games = result;
-                    entry.LastRefresh = DateTime.UtcNow;
-                    entry.Version = CACHE_VERSION;
-                    return new GameListResponse { Games = result, LibraryReady = true };
-                }
-
                 // Stabilization: compare owned IDs across consecutive scans
                 var currentOwnedIds = new HashSet<uint>(result.Where(g => g.Owned).Select(g => g.Id));
+
+                // If already stabilized, only keep treating a forced/stale scan as ready
+                // when it still matches the last cached stable owned-ID set. Otherwise,
+                // re-enter the two-scan stabilization flow instead of caching a possible
+                // partial library.
+                if (_stabilized)
+                {
+                    var stableOwnedIds = entry.Games != null
+                        ? new HashSet<uint>(entry.Games.Where(g => g.Owned).Select(g => g.Id))
+                        : null;
+
+                    if (stableOwnedIds != null && stableOwnedIds.SetEquals(currentOwnedIds))
+                    {
+                        entry.Games = result;
+                        entry.LastRefresh = DateTime.UtcNow;
+                        entry.Version = CACHE_VERSION;
+                        return new GameListResponse { Games = result, LibraryReady = true };
+                    }
+
+                    SecurityLogger.Log(LogLevel.Info, LogContext.Cache,
+                        $"Library changed during refresh: previous={stableOwnedIds?.Count ?? 0}, current={currentOwnedIds.Count} owned apps; re-stabilizing");
+                    _stabilized = false;
+                    _previousOwnedIds = currentOwnedIds;
+                    return new GameListResponse { Games = result, LibraryReady = false };
+                }
 
                 if (_previousOwnedIds == null)
                 {

@@ -26,11 +26,16 @@ export function useGames(includeUnowned = false, enabled = true) {
     retry: (failureCount, error) =>
       !isSteamUnavailableError(error) && failureCount < 3,
     // Poll while Steam is down, recovery is in progress, or library hasn't stabilized.
-    refetchInterval: (query) =>
-      isSteamUnavailableError(query.state.error) || isRecovering ||
-      (query.state.data && !query.state.data.libraryReady)
-        ? STEAM_RECOVERY_REFETCH_INTERVAL_MS
-        : false,
+    refetchInterval: (query) => {
+      if (query.state.error && !isSteamUnavailableError(query.state.error)) {
+        return false
+      }
+
+      return isSteamUnavailableError(query.state.error) || isRecovering ||
+        (query.state.data && !query.state.data.libraryReady)
+          ? STEAM_RECOVERY_REFETCH_INTERVAL_MS
+          : false
+    },
     refetchIntervalInBackground: true
   })
 

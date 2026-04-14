@@ -9,6 +9,12 @@ export interface DownloadProgress {
   total: number
 }
 
+export interface ServiceConfig {
+  baseUrl: string
+  token: string
+  appId?: number | null
+}
+
 export interface ElectronAPI {
   getConfig: () => Promise<{ baseUrl: string; token: string }>
   windowMinimize: () => void
@@ -24,7 +30,7 @@ export interface ElectronAPI {
   onUpdateDownloaded: (callback: () => void) => () => void
   onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void
   onUpdateError: (callback: (message: string) => void) => () => void
-  onConfigUpdated: (callback: (config: { baseUrl: string; token: string }) => void) => () => void
+  onConfigUpdated: (callback: (config: ServiceConfig) => void) => () => void
 }
 
 declare global {

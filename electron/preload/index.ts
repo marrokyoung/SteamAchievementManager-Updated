@@ -13,6 +13,12 @@ export interface DownloadProgress {
   total: number
 }
 
+export interface ServiceConfig {
+  baseUrl: string
+  token: string
+  appId?: number | null
+}
+
 export interface ElectronAPI {
   getConfig: () => Promise<{ baseUrl: string; token: string }>
   windowMinimize: () => void
@@ -28,7 +34,7 @@ export interface ElectronAPI {
   onUpdateDownloaded: (callback: () => void) => () => void
   onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void
   onUpdateError: (callback: (message: string) => void) => () => void
-  onConfigUpdated: (callback: (config: { baseUrl: string; token: string }) => void) => () => void
+  onConfigUpdated: (callback: (config: ServiceConfig) => void) => () => void
 }
 
 contextBridge.exposeInMainWorld('electron', {
@@ -62,8 +68,8 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.on('update-error', listener)
     return () => { ipcRenderer.removeListener('update-error', listener) }
   },
-  onConfigUpdated: (callback: (config: { baseUrl: string; token: string }) => void) => {
-    const listener = (_: unknown, config: { baseUrl: string; token: string }) => callback(config)
+  onConfigUpdated: (callback: (config: ServiceConfig) => void) => {
+    const listener = (_: unknown, config: ServiceConfig) => callback(config)
     ipcRenderer.on('config-updated', listener)
     return () => { ipcRenderer.removeListener('config-updated', listener) }
   }

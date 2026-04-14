@@ -191,33 +191,77 @@ async function startService(): Promise<void> {
   })
 
   // Poll authenticated readiness endpoint until the new service instance is ready.
-  await pollHealthEndpoint()
+  await pollHealthEndpoint(child)
   console.log('SAM.Service is ready')
 
   // Neutral mode
   currentForcedAppId = null
 }
 
-async function pollHealthEndpoint(): Promise<void> {
-  for (let i = 0; i < MAX_HEALTH_ATTEMPTS; i++) {
-    try {
-      const response = await fetch(`${SERVICE_BASE_URL}/api/status`, {
-        headers: {
-          'X-SAM-Auth': apiToken
-        }
-      })
-      const body = await response.text().catch(() => '')
-      if (response.ok) {
-        logStartup(`service status ready attempt=${i + 1} token=${tokenFingerprint()} body=${body}`)
-        return // Service is ready
+async function pollHealthEndpoint(child: ChildProcess): Promise<void> {
+  const pid = child.pid ?? 'unknown'
+  let onExit: ((code: number | null, signal: NodeJS.Signals | null) => void) | undefined
+  let onError: ((error: Error) => void) | undefined
+  const childFailed = new Promise<never>((_resolve, reject) => {
+    onExit = (code, signal) => {
+      reject(new Error(`SAM.Service exited before readiness pid=${pid} code=${code ?? 'null'} signal=${signal ?? 'none'}`))
+    }
+    onError = (error) => {
+      if (child === serviceProcess) {
+        serviceProcess = null
       }
-      logStartup(`service status not ready attempt=${i + 1} status=${response.status} token=${tokenFingerprint()} body=${body}`)
-    } catch (err) {
-      logStartup(`service status failed attempt=${i + 1}`, err)
-      // Service not ready yet, continue polling
+      reject(new Error(`SAM.Service error before readiness pid=${pid}: ${getErrorMessage(error)}`))
+    }
+    child.once('exit', onExit)
+    child.once('error', onError)
+  })
+
+  try {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(`SAM.Service exited before readiness pid=${pid} code=${child.exitCode ?? 'null'} signal=${child.signalCode ?? 'none'}`)
     }
 
-    await new Promise(resolve => setTimeout(resolve, HEALTH_CHECK_INTERVAL))
+    for (let i = 0; i < MAX_HEALTH_ATTEMPTS; i++) {
+      const ready = await Promise.race([
+        (async () => {
+          try {
+            const response = await fetch(`${SERVICE_BASE_URL}/api/status`, {
+              headers: {
+                'X-SAM-Auth': apiToken
+              }
+            })
+            const body = await response.text().catch(() => '')
+            if (response.ok) {
+              logStartup(`service status ready attempt=${i + 1} token=${tokenFingerprint()} body=${body}`)
+              return true
+            }
+            logStartup(`service status not ready attempt=${i + 1} status=${response.status} token=${tokenFingerprint()} body=${body}`)
+          } catch (err) {
+            logStartup(`service status failed attempt=${i + 1}`, err)
+            // Service not ready yet, continue polling
+          }
+
+          return false
+        })(),
+        childFailed
+      ])
+
+      if (ready) {
+        return
+      }
+
+      await Promise.race([
+        new Promise(resolve => setTimeout(resolve, HEALTH_CHECK_INTERVAL)),
+        childFailed
+      ])
+    }
+  } finally {
+    if (onExit) {
+      child.removeListener('exit', onExit)
+    }
+    if (onError) {
+      child.removeListener('error', onError)
+    }
   }
 
   throw new Error('SAM.Service failed to start within timeout period')
@@ -319,7 +363,7 @@ async function restartServiceWithAppId(appId: number): Promise<void> {
   })
 
   // Poll health endpoint
-  await pollHealthEndpoint()
+  await pollHealthEndpoint(child)
 
   // Check if process exited during health check
   if (startupError) {
@@ -514,6 +558,7 @@ ipcMain.handle('download-update', async () => {
 
 ipcMain.handle('install-update', async () => {
   let serviceStopped = false
+  const previousForcedAppId = currentForcedAppId
   try {
     // Resolve the updater before stopping the service so a failure here
     // doesn't leave the app running without its backend.
@@ -530,10 +575,15 @@ ipcMain.handle('install-update', async () => {
       // startService() generates a new apiToken, so push it to the renderer
       // to avoid 401s from the stale cached token.
       try {
-        await startService()
+        if (previousForcedAppId !== null) {
+          await restartServiceWithAppId(previousForcedAppId)
+        } else {
+          await startService()
+        }
         mainWindow?.webContents.send('config-updated', {
           baseUrl: SERVICE_BASE_URL,
-          token: apiToken
+          token: apiToken,
+          appId: currentForcedAppId
         })
       } catch { /* best-effort */ }
     }

@@ -170,14 +170,21 @@ async function startService(): Promise<void> {
   console.log('Generated API token')
   logStartup(`generated API token ${tokenFingerprint()} for neutral service`)
 
-  serviceProcess = spawnService()
+  const child = spawnService()
+  serviceProcess = child
 
-  serviceProcess.on('error', (err) => {
+  child.on('error', (err) => {
+    if (child !== serviceProcess) {
+      return
+    }
     console.error('Failed to start SAM.Service:', err)
     logStartup('service process error', err)
   })
 
-  serviceProcess.on('exit', (code) => {
+  child.on('exit', (code) => {
+    if (child !== serviceProcess) {
+      return
+    }
     console.log(`SAM.Service exited with code ${code}`)
     logStartup(`service process exited with code ${code}`)
     serviceProcess = null
@@ -216,64 +223,94 @@ async function pollHealthEndpoint(): Promise<void> {
   throw new Error('SAM.Service failed to start within timeout period')
 }
 
-async function stopService(): Promise<void> {
+async function stopService(): Promise<boolean> {
   const processToStop = serviceProcess
-  if (processToStop) {
-    console.log('Stopping SAM.Service...')
-    logStartup(`stopping service pid=${processToStop.pid ?? 'unknown'}`)
-    serviceProcess = null
-
-    if (processToStop.exitCode !== null) {
-      logStartup(`service pid=${processToStop.pid ?? 'unknown'} already exited code=${processToStop.exitCode}`)
-      return
-    }
-
-    const exited = new Promise<void>((resolve) => {
-      processToStop.once('exit', (code) => {
-        logStartup(`service pid=${processToStop.pid ?? 'unknown'} exit observed code=${code}`)
-        resolve()
-      })
-      processToStop.once('error', (error) => {
-        logStartup(`service pid=${processToStop.pid ?? 'unknown'} error during stop`, error)
-        resolve()
-      })
-    })
-
-    const killSent = processToStop.kill()
-    logStartup(`service kill signal sent pid=${processToStop.pid ?? 'unknown'} result=${killSent}`)
-
-    // Avoid racing the replacement service against the old process still
-    // owning the port, but don't hang forever on shutdown.
-    const stopped = await Promise.race([
-      exited.then(() => true),
-      new Promise<boolean>(resolve => setTimeout(() => resolve(false), 3000))
-    ])
-    logStartup(`service stop wait complete pid=${processToStop.pid ?? 'unknown'} exited=${stopped}`)
+  if (!processToStop) {
+    return true
   }
+
+  const pid = processToStop.pid ?? 'unknown'
+  console.log('Stopping SAM.Service...')
+  logStartup(`stopping service pid=${pid}`)
+
+  if (processToStop.exitCode !== null) {
+    logStartup(`service pid=${pid} already exited code=${processToStop.exitCode}`)
+    if (processToStop === serviceProcess) {
+      serviceProcess = null
+    }
+    return true
+  }
+
+  const exited = new Promise<boolean>((resolve) => {
+    processToStop.once('exit', (code) => {
+      logStartup(`service pid=${pid} exit observed code=${code}`)
+      if (processToStop === serviceProcess) {
+        serviceProcess = null
+      }
+      resolve(true)
+    })
+    processToStop.once('error', (error) => {
+      // Intentionally not nulling serviceProcess here: an error during kill
+      // doesn't guarantee the process is dead — it may still own the port.
+      // Keeping the reference lets a future stopService() retry the kill.
+      logStartup(`service pid=${pid} error during stop`, error)
+      resolve(false)
+    })
+  })
+
+  const killSent = processToStop.kill()
+  logStartup(`service kill signal sent pid=${pid} result=${killSent}`)
+
+  // Avoid racing the replacement service against the old process still
+  // owning the port, but don't hang forever on shutdown.
+  const stopped = await Promise.race([
+    exited,
+    new Promise<boolean>(resolve => setTimeout(() => resolve(false), 3000))
+  ])
+  logStartup(`service stop wait complete pid=${pid} exited=${stopped}`)
+
+  // Intentionally keeping serviceProcess on timeout: the old process may
+  // still own the port, so retaining the reference lets a future stop
+  // attempt retry the kill rather than silently losing track of it.
+  if (!stopped) {
+    logStartup(`ERROR service stop timed out pid=${pid}; refusing to restart while old service may still own the port`)
+  }
+
+  return stopped
 }
 
 async function restartServiceWithAppId(appId: number): Promise<void> {
   console.log(`Restarting service for AppId ${appId}...`)
 
-  await stopService()
+  const stopped = await stopService()
+  if (!stopped) {
+    throw new Error('SAM.Service failed to stop within timeout; app restart aborted')
+  }
 
   // Generate new token for security
   apiToken = randomBytes(32).toString('hex')
   console.log('Generated new API token')
   logStartup(`generated API token ${tokenFingerprint()} for AppId ${appId}`)
 
-  serviceProcess = spawnService({
+  const child = spawnService({
     SAM_FORCE_APP_ID: appId.toString()
   })
+  serviceProcess = child
 
   let startupError: Error | null = null
 
-  serviceProcess.on('error', (err) => {
+  child.on('error', (err) => {
+    if (child !== serviceProcess) {
+      return
+    }
     console.error('Failed to start SAM.Service:', err)
     startupError = err
   })
 
-  serviceProcess.on('exit', (code) => {
+  child.on('exit', (code) => {
+    if (child !== serviceProcess) {
+      return
+    }
     console.log(`SAM.Service exited with code ${code}`)
     if (code !== null && code !== 0 && !startupError) {
       startupError = new Error(`Service exited with code ${code}`)
@@ -296,7 +333,10 @@ async function restartServiceWithAppId(appId: number): Promise<void> {
 async function restartServiceNeutral(): Promise<void> {
   console.log('Restarting service in neutral mode...')
 
-  await stopService()
+  const stopped = await stopService()
+  if (!stopped) {
+    throw new Error('SAM.Service failed to stop within timeout; neutral restart aborted')
+  }
   await startService() // Uses original startService (no forced AppId)
 }
 
@@ -478,7 +518,10 @@ ipcMain.handle('install-update', async () => {
     // Resolve the updater before stopping the service so a failure here
     // doesn't leave the app running without its backend.
     const updater = await getAutoUpdater()
-    await stopService()
+    const stopped = await stopService()
+    if (!stopped) {
+      throw new Error('SAM.Service failed to stop within timeout; update installation aborted')
+    }
     serviceStopped = true
     updater.quitAndInstall(false, true)
   } catch (error) {
@@ -517,7 +560,10 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', async () => {
   logStartup('window-all-closed received')
-  await stopService()
+  const stopped = await stopService()
+  if (!stopped) {
+    logStartup('window-all-closed continuing after service stop timeout')
+  }
   app.quit()
 })
 

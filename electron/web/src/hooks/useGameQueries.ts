@@ -43,23 +43,28 @@ export function useGames(includeUnowned = false, enabled = true) {
   //   exit   — forced refresh succeeds with ready library, OR a non-Steam error occurs
   useEffect(() => {
     let cancelled = false
+    let controller: AbortController | null = null
+    const cleanup = () => {
+      cancelled = true
+      controller?.abort()
+    }
 
     if (!enabled) {
-      return () => { cancelled = true }
+      return cleanup
     }
 
     if (isWaitingForSteam) {
       setIsRecovering(true)
       forceRefreshFiredRef.current = false
-      return
+      return cleanup
     }
 
-    if (!isRecovering) return
+    if (!isRecovering) return cleanup
 
     // Non-Steam error during recovery — exit so the real error screen shows
     if (query.error) {
       setIsRecovering(false)
-      return
+      return cleanup
     }
 
     // First successful response with a ready library means Steam is fully loaded.
@@ -68,7 +73,11 @@ export function useGames(includeUnowned = false, enabled = true) {
     // AND the library is marked ready.
     if (query.data && libraryReady && !forceRefreshFiredRef.current) {
       forceRefreshFiredRef.current = true
-      apiClient<GameListResponse>(`/api/games?includeUnowned=${includeUnowned}&refresh=true`)
+      controller = new AbortController()
+      apiClient<GameListResponse>(
+        `/api/games?includeUnowned=${includeUnowned}&refresh=true`,
+        { signal: controller.signal }
+      )
         .then((response) => {
           // Effect was invalidated while request was in flight — re-arm so
           // the next effect run can fire a fresh forced refresh.
@@ -82,12 +91,12 @@ export function useGames(includeUnowned = false, enabled = true) {
           }
         })
         .catch(() => {
-          // Re-arm regardless of cancellation so recovery isn't stuck
+          // AbortError is expected on cleanup; re-arm either way so recovery isn't stuck.
           forceRefreshFiredRef.current = false
         })
     }
 
-    return () => { cancelled = true }
+    return cleanup
   }, [isWaitingForSteam, isRecovering, query.error, query.data, libraryReady, includeUnowned, enabled, queryClient])
 
   // Manual force-refresh: bypasses the server cache then updates query data directly

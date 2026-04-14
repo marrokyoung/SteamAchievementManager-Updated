@@ -141,9 +141,12 @@ namespace SAM.Service.Core
 
         public void Dispose()
         {
-            _cache.Clear();
-            _previousOwnedIds = null;
-            _stabilized = false;
+            lock (_lock)
+            {
+                _cache.Clear();
+                _previousOwnedIds = null;
+                _stabilized = false;
+            }
         }
     }
 }

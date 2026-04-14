@@ -65,7 +65,7 @@ export function AchievementsSection({
   }, [filteredAchievements, modifiedAchievements, appId, onToggle])
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       <div className="mb-4 space-y-2">
         <h3 className="text-lg font-semibold whitespace-nowrap">
           Achievements ({totalCount})

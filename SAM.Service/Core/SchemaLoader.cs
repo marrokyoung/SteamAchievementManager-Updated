@@ -48,7 +48,22 @@ namespace SAM.Service.Core
 
                 var rawType = stat["type_int"].Valid
                     ? stat["type_int"].AsInteger(0)
-                    : stat["type"].AsInteger(0);
+                    : stat["type"].AsInteger(-1);
+
+                // Older games (e.g. Castle Crashers) store type as a string
+                // name like "ACHIEVEMENTS" or "INT" instead of an integer.
+                if (rawType < 0)
+                {
+                    rawType = stat["type"].AsString("") switch
+                    {
+                        var s when s.Equals("INT", StringComparison.OrdinalIgnoreCase) => 1,
+                        var s when s.Equals("FLOAT", StringComparison.OrdinalIgnoreCase) => 2,
+                        var s when s.Equals("AVGRATE", StringComparison.OrdinalIgnoreCase) => 3,
+                        var s when s.Equals("ACHIEVEMENTS", StringComparison.OrdinalIgnoreCase) => 4,
+                        var s when s.Equals("GROUPACHIEVEMENTS", StringComparison.OrdinalIgnoreCase) => 5,
+                        _ => 0
+                    };
+                }
 
                 var type = (API.Types.UserStatType)rawType;
 

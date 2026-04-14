@@ -9,7 +9,7 @@
     "test": "vitest",
     "test:run": "vitest run",
     "clean:dist": "node -e \"const fs=require('fs');['dist','dist-electron','release'].forEach(d=>{if(fs.existsSync(d)){fs.rmSync(d,{recursive:true,force:true});console.log('Removed '+d)}})\"",
-    "build:service": "dotnet build ../SAM.Service/SAM.Service.csproj -c Release -p:Platform=x86",
+    "build:service": "dotnet build ../SAM.Service/SAM.Service.csproj -c Debug -p:Platform=x86 && dotnet build ../SAM.Service/SAM.Service.csproj -c Release -p:Platform=x86",
     "prepackage": "npm run build:service",
     "package": "npm run clean:dist && npm run build && electron-builder"
   },

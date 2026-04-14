@@ -142,7 +142,7 @@ export default function PickerView() {
   // When returning from a game manager, the service restarts briefly —
   // suppress the overlay during that neutral window if we already have games.
   const showOverlay = isConnecting || ((isWaitingForSteam || isRecovering) && !hasGames)
-  const showErrorCard = !showOverlay && !!error
+  const showErrorCard = !showOverlay && !!error && !isWaitingForSteam
   const showContent = !showOverlay && !showErrorCard
 
   // Derive overlay card text from stable values only.

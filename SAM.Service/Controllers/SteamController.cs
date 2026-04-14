@@ -27,6 +27,22 @@ namespace SAM.Service.Controllers
         }
 
         /// <summary>
+        /// GET /api/status - Authenticated readiness check
+        /// </summary>
+        [HttpGet]
+        [Route("status")]
+        public IHttpActionResult Status()
+        {
+            return Ok(new
+            {
+                status = "ready",
+                forcedAppId = ServiceContext.ForcedAppId,
+                serviceInstanceId = Environment.GetEnvironmentVariable("SAM_SERVICE_INSTANCE_ID"),
+                timestamp = DateTime.UtcNow
+            });
+        }
+
+        /// <summary>
         /// POST /api/init - Initialize Steam client for specific AppId
         /// </summary>
         [HttpPost]

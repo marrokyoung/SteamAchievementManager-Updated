@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { spawn, ChildProcess } from 'child_process'
-import { randomBytes } from 'crypto'
+import { createHash, randomBytes } from 'crypto'
 import fs from 'fs'
 import path from 'path'
 
@@ -39,6 +39,7 @@ let serviceProcess: ChildProcess | null = null
 let apiToken: string = ''
 let isRestartingService = false
 let currentForcedAppId: number | null = null
+let serviceInstanceCounter = 0
 
 // Allow overriding service URL/port via SAM_BASE_URL env (useful if 8787 is taken)
 const DEFAULT_SERVICE_PORT = 8787
@@ -69,6 +70,10 @@ function getServicePath() {
   return app.isPackaged
     ? path.join(process.resourcesPath, 'sam-service', 'SAM.Service.exe')
     : getDevServicePath()
+}
+
+function tokenFingerprint(token = apiToken) {
+  return createHash('sha256').update(token).digest('hex').slice(0, 8)
 }
 
 function pipeServiceOutput(stream: NodeJS.ReadableStream | null, label: 'stdout' | 'stderr') {
@@ -104,15 +109,19 @@ function pipeServiceOutput(stream: NodeJS.ReadableStream | null, label: 'stdout'
 
 function spawnService(extraEnv: Record<string, string> = {}) {
   const servicePath = getServicePath()
+  const serviceInstanceId = String(++serviceInstanceCounter)
+  const mode = extraEnv.SAM_FORCE_APP_ID ? `app:${extraEnv.SAM_FORCE_APP_ID}` : 'neutral'
 
   console.log(`Service path: ${servicePath}`)
   logStartup(`resolved service path: ${servicePath}`)
+  logStartup(`spawning service instance=${serviceInstanceId} mode=${mode} token=${tokenFingerprint()}`)
 
   const child = spawn(servicePath, [], {
     env: {
       ...process.env,
       SAM_API_TOKEN: apiToken,
       SAM_BASE_URL: SERVICE_BASE_URL,
+      SAM_SERVICE_INSTANCE_ID: serviceInstanceId,
       ...extraEnv
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -121,6 +130,7 @@ function spawnService(extraEnv: Record<string, string> = {}) {
 
   pipeServiceOutput(child.stdout, 'stdout')
   pipeServiceOutput(child.stderr, 'stderr')
+  logStartup(`spawned service instance=${serviceInstanceId} pid=${child.pid ?? 'unknown'} mode=${mode}`)
 
   return child
 }
@@ -158,6 +168,7 @@ async function startService(): Promise<void> {
   // Generate cryptographically random token
   apiToken = randomBytes(32).toString('hex')
   console.log('Generated API token')
+  logStartup(`generated API token ${tokenFingerprint()} for neutral service`)
 
   serviceProcess = spawnService()
 
@@ -172,7 +183,7 @@ async function startService(): Promise<void> {
     serviceProcess = null
   })
 
-  // Poll /health endpoint until ready
+  // Poll authenticated readiness endpoint until the new service instance is ready.
   await pollHealthEndpoint()
   console.log('SAM.Service is ready')
 
@@ -183,11 +194,19 @@ async function startService(): Promise<void> {
 async function pollHealthEndpoint(): Promise<void> {
   for (let i = 0; i < MAX_HEALTH_ATTEMPTS; i++) {
     try {
-      const response = await fetch(`${SERVICE_BASE_URL}/health`)
+      const response = await fetch(`${SERVICE_BASE_URL}/api/status`, {
+        headers: {
+          'X-SAM-Auth': apiToken
+        }
+      })
+      const body = await response.text().catch(() => '')
       if (response.ok) {
+        logStartup(`service status ready attempt=${i + 1} token=${tokenFingerprint()} body=${body}`)
         return // Service is ready
       }
+      logStartup(`service status not ready attempt=${i + 1} status=${response.status} token=${tokenFingerprint()} body=${body}`)
     } catch (err) {
+      logStartup(`service status failed attempt=${i + 1}`, err)
       // Service not ready yet, continue polling
     }
 
@@ -198,13 +217,38 @@ async function pollHealthEndpoint(): Promise<void> {
 }
 
 async function stopService(): Promise<void> {
-  if (serviceProcess) {
+  const processToStop = serviceProcess
+  if (processToStop) {
     console.log('Stopping SAM.Service...')
-    serviceProcess.kill()
+    logStartup(`stopping service pid=${processToStop.pid ?? 'unknown'}`)
     serviceProcess = null
 
-    // Wait briefly for process to exit
-    await new Promise(resolve => setTimeout(resolve, 500))
+    if (processToStop.exitCode !== null) {
+      logStartup(`service pid=${processToStop.pid ?? 'unknown'} already exited code=${processToStop.exitCode}`)
+      return
+    }
+
+    const exited = new Promise<void>((resolve) => {
+      processToStop.once('exit', (code) => {
+        logStartup(`service pid=${processToStop.pid ?? 'unknown'} exit observed code=${code}`)
+        resolve()
+      })
+      processToStop.once('error', (error) => {
+        logStartup(`service pid=${processToStop.pid ?? 'unknown'} error during stop`, error)
+        resolve()
+      })
+    })
+
+    const killSent = processToStop.kill()
+    logStartup(`service kill signal sent pid=${processToStop.pid ?? 'unknown'} result=${killSent}`)
+
+    // Avoid racing the replacement service against the old process still
+    // owning the port, but don't hang forever on shutdown.
+    const stopped = await Promise.race([
+      exited.then(() => true),
+      new Promise<boolean>(resolve => setTimeout(() => resolve(false), 3000))
+    ])
+    logStartup(`service stop wait complete pid=${processToStop.pid ?? 'unknown'} exited=${stopped}`)
   }
 }
 
@@ -216,6 +260,7 @@ async function restartServiceWithAppId(appId: number): Promise<void> {
   // Generate new token for security
   apiToken = randomBytes(32).toString('hex')
   console.log('Generated new API token')
+  logStartup(`generated API token ${tokenFingerprint()} for AppId ${appId}`)
 
   serviceProcess = spawnService({
     SAM_FORCE_APP_ID: appId.toString()

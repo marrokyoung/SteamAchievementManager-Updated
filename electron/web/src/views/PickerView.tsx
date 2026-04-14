@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { Search, Gamepad2, RefreshCw, Loader2, Filter } from 'lucide-react'
 import { useGames } from '@/hooks/useGameQueries'
 import { updateAPIConfig, initializeAPI, isSteamUnavailableError } from '@/lib/api'
@@ -80,6 +81,7 @@ export default function PickerView() {
 
   const [previousFilters, setPreviousFilters] = useState<Set<string>>(new Set())
   const [isRestartingService, setIsRestartingService] = useState(false)
+  const queryClient = useQueryClient()
 
   // Persist filter state to localStorage
   useEffect(() => {
@@ -90,7 +92,7 @@ export default function PickerView() {
   }, [showAllTypes, activeFilters])
 
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const { data: games, isLoading, isFetching, isFetched, error, refetch, forceRefresh, isRecovering, libraryReady } = useGames(false)
+  const { data: games, isLoading, isFetching, isFetched, error, refetch, forceRefresh, isRecovering, libraryReady } = useGames(false, !isRestartingService)
   const isWaitingForSteam = isSteamUnavailableError(error)
 
   const handleGameSelect = async (appId: number) => {
@@ -99,6 +101,9 @@ export default function PickerView() {
     setIsRestartingService(true)
     try {
       const bridge = getElectronBridge()
+
+      // Stop library polling before switching the backend into forced-app mode.
+      await queryClient.cancelQueries({ queryKey: ['games', false] })
 
       // Restart service with forced AppId
       const result = await bridge.startServiceForApp(appId)

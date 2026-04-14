@@ -10,17 +10,19 @@ import type {
 
 const STEAM_RECOVERY_REFETCH_INTERVAL_MS = 1500
 
-export function useGames(includeUnowned = false) {
+export function useGames(includeUnowned = false, enabled = true) {
   const queryClient = useQueryClient()
   const [isRecovering, setIsRecovering] = useState(false)
   const forceRefreshFiredRef = useRef(false)
 
   const query = useQuery({
     queryKey: ['games', includeUnowned],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       apiClient<GameListResponse>(
-        `/api/games?includeUnowned=${includeUnowned}`
+        `/api/games?includeUnowned=${includeUnowned}`,
+        { signal }
       ),
+    enabled,
     retry: (failureCount, error) =>
       !isSteamUnavailableError(error) && failureCount < 3,
     // Poll while Steam is down, recovery is in progress, or library hasn't stabilized.
@@ -41,6 +43,10 @@ export function useGames(includeUnowned = false) {
   //   exit   — forced refresh succeeds with ready library, OR a non-Steam error occurs
   useEffect(() => {
     let cancelled = false
+
+    if (!enabled) {
+      return () => { cancelled = true }
+    }
 
     if (isWaitingForSteam) {
       setIsRecovering(true)
@@ -82,7 +88,7 @@ export function useGames(includeUnowned = false) {
     }
 
     return () => { cancelled = true }
-  }, [isWaitingForSteam, isRecovering, query.error, query.data, libraryReady, includeUnowned, queryClient])
+  }, [isWaitingForSteam, isRecovering, query.error, query.data, libraryReady, includeUnowned, enabled, queryClient])
 
   // Manual force-refresh: bypasses the server cache then updates query data directly
   const forceRefresh = useCallback(async () => {

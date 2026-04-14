@@ -144,6 +144,7 @@ export default function PickerView() {
   const showOverlay = isConnecting || ((isWaitingForSteam || isRecovering) && !hasGames)
   const showErrorCard = !showOverlay && !!error && !isWaitingForSteam
   const showContent = !showOverlay && !showErrorCard
+  const showLibraryStabilizingNotice = isRecovering && !libraryReady && hasGames
 
   // Derive overlay card text from stable values only.
   // `isWaitingForSteam` is derived from query.error which TanStack Query
@@ -363,7 +364,7 @@ export default function PickerView() {
           </div>
 
           {/* Library still stabilizing — Steam may still be loading subscriptions */}
-          {!libraryReady && games && games.length > 0 && (
+          {showLibraryStabilizingNotice && (
             <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               Steam is still loading your library. The list will update automatically.

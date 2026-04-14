@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useLocation, useNavigate, useMatch } from 'react-router-dom'
 import { ChevronLeft, Loader2, Minus, Maximize2, X } from 'lucide-react'
 import { Button } from './ui/button'
@@ -25,7 +25,21 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
   const { hasUnsavedChanges, setHasUnsavedChanges, isNavigatingBack, setIsNavigatingBack } = useUnsavedChanges()
   const isBackingOutRef = useRef(false)
+  const mainScrollRef = useRef<HTMLElement | null>(null)
   const [showLeaveDialog, setShowLeaveDialog] = useState(false)
+
+  useEffect(() => {
+    const scrollContainer = mainScrollRef.current
+    if (!scrollContainer) return
+
+    if (typeof scrollContainer.scrollTo === 'function') {
+      scrollContainer.scrollTo({ top: 0, left: 0 })
+      return
+    }
+
+    scrollContainer.scrollTop = 0
+    scrollContainer.scrollLeft = 0
+  }, [location.pathname])
 
   const performManagerBack = useCallback(async () => {
     if (isBackingOutRef.current) return
@@ -159,7 +173,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       </Dialog>
 
       {/* Main Content */}
-      <main className="relative z-10 flex-1 overflow-auto sam-scrollbar">
+      <main ref={mainScrollRef} className="relative z-10 flex-1 overflow-auto sam-scrollbar">
         {children}
       </main>
     </div>

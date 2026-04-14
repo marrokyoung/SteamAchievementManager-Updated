@@ -23,7 +23,8 @@ describe('electronBridge', () => {
       onUpdateAvailable: () => () => {},
       onUpdateDownloaded: () => () => {},
       onDownloadProgress: () => () => {},
-      onUpdateError: () => () => {}
+      onUpdateError: () => () => {},
+      onConfigUpdated: () => () => {}
     }
   })
 

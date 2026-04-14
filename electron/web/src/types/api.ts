@@ -52,3 +52,8 @@ export interface StatUpdate {
   id: string
   value: number
 }
+
+export interface GameListResponse {
+  games: Game[]
+  libraryReady: boolean
+}

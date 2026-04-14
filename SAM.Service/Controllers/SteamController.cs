@@ -27,6 +27,22 @@ namespace SAM.Service.Controllers
         }
 
         /// <summary>
+        /// GET /api/status - Authenticated readiness check
+        /// </summary>
+        [HttpGet]
+        [Route("status")]
+        public IHttpActionResult Status()
+        {
+            return Ok(new
+            {
+                status = "ready",
+                forcedAppId = ServiceContext.ForcedAppId,
+                serviceInstanceId = Environment.GetEnvironmentVariable("SAM_SERVICE_INSTANCE_ID"),
+                timestamp = DateTime.UtcNow
+            });
+        }
+
+        /// <summary>
         /// POST /api/init - Initialize Steam client for specific AppId
         /// </summary>
         [HttpPost]
@@ -103,8 +119,8 @@ namespace SAM.Service.Controllers
                 if (ServiceContext.ForcedAppId != null)
                 {
                     var client = ClientManager.GetRawClient();
-                    var games = await Task.Run(() => GameListCache.GetGames(client, includeUnowned, refresh));
-                    return Ok(games);
+                    var response = await Task.Run(() => GameListCache.GetGames(client, includeUnowned, refresh));
+                    return Ok(response);
                 }
 
                 // Initialize with AppId 0 (neutral client) if not already initialized
@@ -118,9 +134,9 @@ namespace SAM.Service.Controllers
                 }
 
                 var client2 = ClientManager.GetRawClient();
-                var games2 = await Task.Run(() => GameListCache.GetGames(client2, includeUnowned, refresh));
+                var response2 = await Task.Run(() => GameListCache.GetGames(client2, includeUnowned, refresh));
 
-                return Ok(games2);
+                return Ok(response2);
             }
             catch (API.ClientInitializeException ex)
             {

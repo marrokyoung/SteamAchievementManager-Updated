@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { spawn, ChildProcess } from 'child_process'
-import { randomBytes } from 'crypto'
+import { createHash, randomBytes } from 'crypto'
 import fs from 'fs'
 import path from 'path'
 
@@ -39,6 +39,7 @@ let serviceProcess: ChildProcess | null = null
 let apiToken: string = ''
 let isRestartingService = false
 let currentForcedAppId: number | null = null
+let serviceInstanceCounter = 0
 
 // Allow overriding service URL/port via SAM_BASE_URL env (useful if 8787 is taken)
 const DEFAULT_SERVICE_PORT = 8787
@@ -65,6 +66,101 @@ function getPreloadPath() {
     : path.resolve(process.cwd(), 'dist-electron', 'preload.cjs')
 }
 
+function getServicePath() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'sam-service', 'SAM.Service.exe')
+    : getDevServicePath()
+}
+
+function tokenFingerprint(token = apiToken) {
+  return createHash('sha256').update(token).digest('hex').slice(0, 8)
+}
+
+function pipeServiceOutput(stream: NodeJS.ReadableStream | null, label: 'stdout' | 'stderr') {
+  if (!stream) {
+    return
+  }
+
+  const readable = stream as NodeJS.ReadableStream & {
+    setEncoding: (encoding: BufferEncoding) => void
+  }
+
+  readable.setEncoding('utf8')
+  readable.on('data', (chunk: string | Buffer) => {
+    const text = String(chunk).trim()
+    if (!text) {
+      return
+    }
+
+    for (const line of text.split(/\r?\n/)) {
+      if (!line) {
+        continue
+      }
+
+      if (label === 'stderr') {
+        console.error(`[SAM.Service] ${line}`)
+      } else {
+        console.log(`[SAM.Service] ${line}`)
+      }
+      logStartup(`[service:${label}] ${line}`)
+    }
+  })
+}
+
+function spawnService(extraEnv: Record<string, string> = {}) {
+  const servicePath = getServicePath()
+  const serviceInstanceId = String(++serviceInstanceCounter)
+  const mode = extraEnv.SAM_FORCE_APP_ID ? `app:${extraEnv.SAM_FORCE_APP_ID}` : 'neutral'
+
+  console.log(`Service path: ${servicePath}`)
+  logStartup(`resolved service path: ${servicePath}`)
+  logStartup(`spawning service instance=${serviceInstanceId} mode=${mode} token=${tokenFingerprint()}`)
+
+  const child = spawn(servicePath, [], {
+    env: {
+      ...process.env,
+      SAM_API_TOKEN: apiToken,
+      SAM_BASE_URL: SERVICE_BASE_URL,
+      SAM_SERVICE_INSTANCE_ID: serviceInstanceId,
+      ...extraEnv
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true
+  })
+
+  pipeServiceOutput(child.stdout, 'stdout')
+  pipeServiceOutput(child.stderr, 'stderr')
+  logStartup(`spawned service instance=${serviceInstanceId} pid=${child.pid ?? 'unknown'} mode=${mode}`)
+
+  return child
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return String(error ?? 'Unknown error')
+}
+
+function formatUpdaterError(error: unknown): string {
+  const message = getErrorMessage(error)
+
+  if (/Cannot parse releases feed/i.test(message) || /unable to find latest version/i.test(message)) {
+    return 'Update metadata is invalid or missing for the latest published release.'
+  }
+
+  if (/latest\.yml/i.test(message) && /(not found|cannot find|404)/i.test(message)) {
+    return 'Update metadata file latest.yml was not found in the published release.'
+  }
+
+  if (message.includes('data:image/') || message.length > 300) {
+    return 'The update server returned invalid release metadata.'
+  }
+
+  return message
+}
+
 async function startService(): Promise<void> {
   logStartup('startService called')
   console.log('Starting SAM.Service...')
@@ -72,108 +168,193 @@ async function startService(): Promise<void> {
   // Generate cryptographically random token
   apiToken = randomBytes(32).toString('hex')
   console.log('Generated API token')
+  logStartup(`generated API token ${tokenFingerprint()} for neutral service`)
 
-  // Locate SAM.Service.exe
-  // In development, the compiled file is at: electron/dist-electron/index.js
-  // We need to go up 2 levels to electron/, then up 1 more to repo root
-  const servicePath = app.isPackaged
-    ? path.join(process.resourcesPath, 'sam-service', 'SAM.Service.exe')
-    : getDevServicePath()
+  const child = spawnService()
+  serviceProcess = child
 
-  console.log(`Service path: ${servicePath}`)
-  logStartup(`resolved service path: ${servicePath}`)
-
-  // Spawn service with token
-  serviceProcess = spawn(servicePath, [], {
-    env: {
-      ...process.env,
-      SAM_API_TOKEN: apiToken,
-      SAM_BASE_URL: SERVICE_BASE_URL
-    },
-    stdio: 'inherit'
-  })
-
-  serviceProcess.on('error', (err) => {
+  child.on('error', (err) => {
+    if (child !== serviceProcess) {
+      return
+    }
     console.error('Failed to start SAM.Service:', err)
     logStartup('service process error', err)
   })
 
-  serviceProcess.on('exit', (code) => {
+  child.on('exit', (code) => {
+    if (child !== serviceProcess) {
+      return
+    }
     console.log(`SAM.Service exited with code ${code}`)
     logStartup(`service process exited with code ${code}`)
     serviceProcess = null
   })
 
-  // Poll /health endpoint until ready
-  await pollHealthEndpoint()
+  // Poll authenticated readiness endpoint until the new service instance is ready.
+  await pollHealthEndpoint(child)
   console.log('SAM.Service is ready')
 
   // Neutral mode
   currentForcedAppId = null
 }
 
-async function pollHealthEndpoint(): Promise<void> {
-  for (let i = 0; i < MAX_HEALTH_ATTEMPTS; i++) {
-    try {
-      const response = await fetch(`${SERVICE_BASE_URL}/health`)
-      if (response.ok) {
-        return // Service is ready
+async function pollHealthEndpoint(child: ChildProcess): Promise<void> {
+  const pid = child.pid ?? 'unknown'
+  let onExit: ((code: number | null, signal: NodeJS.Signals | null) => void) | undefined
+  let onError: ((error: Error) => void) | undefined
+  const childFailed = new Promise<never>((_resolve, reject) => {
+    onExit = (code, signal) => {
+      reject(new Error(`SAM.Service exited before readiness pid=${pid} code=${code ?? 'null'} signal=${signal ?? 'none'}`))
+    }
+    onError = (error) => {
+      if (child === serviceProcess) {
+        serviceProcess = null
       }
-    } catch (err) {
-      // Service not ready yet, continue polling
+      reject(new Error(`SAM.Service error before readiness pid=${pid}: ${getErrorMessage(error)}`))
+    }
+    child.once('exit', onExit)
+    child.once('error', onError)
+  })
+
+  try {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(`SAM.Service exited before readiness pid=${pid} code=${child.exitCode ?? 'null'} signal=${child.signalCode ?? 'none'}`)
     }
 
-    await new Promise(resolve => setTimeout(resolve, HEALTH_CHECK_INTERVAL))
+    for (let i = 0; i < MAX_HEALTH_ATTEMPTS; i++) {
+      const ready = await Promise.race([
+        (async () => {
+          try {
+            const response = await fetch(`${SERVICE_BASE_URL}/api/status`, {
+              headers: {
+                'X-SAM-Auth': apiToken
+              }
+            })
+            const body = await response.text().catch(() => '')
+            if (response.ok) {
+              logStartup(`service status ready attempt=${i + 1} token=${tokenFingerprint()} body=${body}`)
+              return true
+            }
+            logStartup(`service status not ready attempt=${i + 1} status=${response.status} token=${tokenFingerprint()} body=${body}`)
+          } catch (err) {
+            logStartup(`service status failed attempt=${i + 1}`, err)
+            // Service not ready yet, continue polling
+          }
+
+          return false
+        })(),
+        childFailed
+      ])
+
+      if (ready) {
+        return
+      }
+
+      await Promise.race([
+        new Promise(resolve => setTimeout(resolve, HEALTH_CHECK_INTERVAL)),
+        childFailed
+      ])
+    }
+  } finally {
+    if (onExit) {
+      child.removeListener('exit', onExit)
+    }
+    if (onError) {
+      child.removeListener('error', onError)
+    }
   }
 
   throw new Error('SAM.Service failed to start within timeout period')
 }
 
-async function stopService(): Promise<void> {
-  if (serviceProcess) {
-    console.log('Stopping SAM.Service...')
-    serviceProcess.kill()
-    serviceProcess = null
-
-    // Wait briefly for process to exit
-    await new Promise(resolve => setTimeout(resolve, 500))
+async function stopService(): Promise<boolean> {
+  const processToStop = serviceProcess
+  if (!processToStop) {
+    return true
   }
+
+  const pid = processToStop.pid ?? 'unknown'
+  console.log('Stopping SAM.Service...')
+  logStartup(`stopping service pid=${pid}`)
+
+  if (processToStop.exitCode !== null) {
+    logStartup(`service pid=${pid} already exited code=${processToStop.exitCode}`)
+    if (processToStop === serviceProcess) {
+      serviceProcess = null
+    }
+    return true
+  }
+
+  const exited = new Promise<boolean>((resolve) => {
+    processToStop.once('exit', (code) => {
+      logStartup(`service pid=${pid} exit observed code=${code}`)
+      if (processToStop === serviceProcess) {
+        serviceProcess = null
+      }
+      resolve(true)
+    })
+    processToStop.once('error', (error) => {
+      // Intentionally not nulling serviceProcess here: an error during kill
+      // doesn't guarantee the process is dead — it may still own the port.
+      // Keeping the reference lets a future stopService() retry the kill.
+      logStartup(`service pid=${pid} error during stop`, error)
+      resolve(false)
+    })
+  })
+
+  const killSent = processToStop.kill()
+  logStartup(`service kill signal sent pid=${pid} result=${killSent}`)
+
+  // Avoid racing the replacement service against the old process still
+  // owning the port, but don't hang forever on shutdown.
+  const stopped = await Promise.race([
+    exited,
+    new Promise<boolean>(resolve => setTimeout(() => resolve(false), 3000))
+  ])
+  logStartup(`service stop wait complete pid=${pid} exited=${stopped}`)
+
+  // Intentionally keeping serviceProcess on timeout: the old process may
+  // still own the port, so retaining the reference lets a future stop
+  // attempt retry the kill rather than silently losing track of it.
+  if (!stopped) {
+    logStartup(`ERROR service stop timed out pid=${pid}; refusing to restart while old service may still own the port`)
+  }
+
+  return stopped
 }
 
 async function restartServiceWithAppId(appId: number): Promise<void> {
   console.log(`Restarting service for AppId ${appId}...`)
 
-  await stopService()
+  const stopped = await stopService()
+  if (!stopped) {
+    throw new Error('SAM.Service failed to stop within timeout; app restart aborted')
+  }
 
   // Generate new token for security
   apiToken = randomBytes(32).toString('hex')
   console.log('Generated new API token')
+  logStartup(`generated API token ${tokenFingerprint()} for AppId ${appId}`)
 
-  const servicePath = app.isPackaged
-    ? path.join(process.resourcesPath, 'sam-service', 'SAM.Service.exe')
-    : getDevServicePath()
-
-  console.log(`Service path: ${servicePath}`)
-
-  // Spawn with SAM_FORCE_APP_ID environment variable
-  serviceProcess = spawn(servicePath, [], {
-    env: {
-      ...process.env,
-      SAM_API_TOKEN: apiToken,
-      SAM_BASE_URL: SERVICE_BASE_URL,
-      SAM_FORCE_APP_ID: appId.toString()
-    },
-    stdio: 'inherit'
+  const child = spawnService({
+    SAM_FORCE_APP_ID: appId.toString()
   })
+  serviceProcess = child
 
   let startupError: Error | null = null
 
-  serviceProcess.on('error', (err) => {
+  child.on('error', (err) => {
+    if (child !== serviceProcess) {
+      return
+    }
     console.error('Failed to start SAM.Service:', err)
     startupError = err
   })
 
-  serviceProcess.on('exit', (code) => {
+  child.on('exit', (code) => {
+    if (child !== serviceProcess) {
+      return
+    }
     console.log(`SAM.Service exited with code ${code}`)
     if (code !== null && code !== 0 && !startupError) {
       startupError = new Error(`Service exited with code ${code}`)
@@ -182,7 +363,7 @@ async function restartServiceWithAppId(appId: number): Promise<void> {
   })
 
   // Poll health endpoint
-  await pollHealthEndpoint()
+  await pollHealthEndpoint(child)
 
   // Check if process exited during health check
   if (startupError) {
@@ -196,7 +377,10 @@ async function restartServiceWithAppId(appId: number): Promise<void> {
 async function restartServiceNeutral(): Promise<void> {
   console.log('Restarting service in neutral mode...')
 
-  await stopService()
+  const stopped = await stopService()
+  if (!stopped) {
+    throw new Error('SAM.Service failed to stop within timeout; neutral restart aborted')
+  }
   await startService() // Uses original startService (no forced AppId)
 }
 
@@ -343,7 +527,8 @@ async function setupAutoUpdater() {
 
   updater.on('error', (err) => {
     console.error('[updater] Error:', err.message)
-    mainWindow?.webContents.send('update-error', err.message)
+    logStartup('updater error', err)
+    mainWindow?.webContents.send('update-error', formatUpdaterError(err))
   })
 
   // Don't check eagerly here — the renderer triggers the first check
@@ -356,21 +541,54 @@ ipcMain.handle('check-for-updates', async () => {
     const updater = await getAutoUpdater()
     const result = await updater.checkForUpdates()
     return { available: !!result?.updateInfo }
-  } catch {
+  } catch (error) {
+    logStartup('check-for-updates failed', error)
     return { available: false }
   }
 })
 
 ipcMain.handle('download-update', async () => {
-  const updater = await getAutoUpdater()
-  await updater.downloadUpdate()
+  try {
+    const updater = await getAutoUpdater()
+    await updater.downloadUpdate()
+  } catch (error) {
+    throw new Error(formatUpdaterError(error))
+  }
 })
 
 ipcMain.handle('install-update', async () => {
-  // Stop the .NET service before quitting for install
-  await stopService()
-  const updater = await getAutoUpdater()
-  updater.quitAndInstall(false, true)
+  let serviceStopped = false
+  const previousForcedAppId = currentForcedAppId
+  try {
+    // Resolve the updater before stopping the service so a failure here
+    // doesn't leave the app running without its backend.
+    const updater = await getAutoUpdater()
+    const stopped = await stopService()
+    if (!stopped) {
+      throw new Error('SAM.Service failed to stop within timeout; update installation aborted')
+    }
+    serviceStopped = true
+    updater.quitAndInstall(false, true)
+  } catch (error) {
+    if (serviceStopped) {
+      // Service is down but install failed — restart the backend.
+      // startService() generates a new apiToken, so push it to the renderer
+      // to avoid 401s from the stale cached token.
+      try {
+        if (previousForcedAppId !== null) {
+          await restartServiceWithAppId(previousForcedAppId)
+        } else {
+          await startService()
+        }
+        mainWindow?.webContents.send('config-updated', {
+          baseUrl: SERVICE_BASE_URL,
+          token: apiToken,
+          appId: currentForcedAppId
+        })
+      } catch { /* best-effort */ }
+    }
+    throw new Error(formatUpdaterError(error))
+  }
 })
 
 // App lifecycle
@@ -392,7 +610,10 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', async () => {
   logStartup('window-all-closed received')
-  await stopService()
+  const stopped = await stopService()
+  if (!stopped) {
+    logStartup('window-all-closed continuing after service stop timeout')
+  }
   app.quit()
 })
 

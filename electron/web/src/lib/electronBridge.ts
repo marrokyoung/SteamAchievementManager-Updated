@@ -19,6 +19,7 @@ const REQUIRED_METHODS: Array<keyof ElectronBridge> = [
   'onUpdateDownloaded',
   'onDownloadProgress',
   'onUpdateError',
+  'onConfigUpdated',
 ]
 
 /** Validated once at bootstrap in main.tsx, then trusted for the session. */

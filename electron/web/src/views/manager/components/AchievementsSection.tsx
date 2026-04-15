@@ -134,7 +134,7 @@ export function AchievementsSection({
       </div>
 
       {totalCount === 0 ? (
-        <div className="rounded-xl sam-glass-panel p-8 text-center">
+        <div className="flex-1 rounded-xl sam-glass-panel p-8 text-center">
           <Trophy className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
           <p className="text-sm font-medium text-white mb-1">No achievements</p>
           <p className="text-xs text-muted-foreground/70">
@@ -142,7 +142,7 @@ export function AchievementsSection({
           </p>
         </div>
       ) : filteredAchievements.length === 0 ? (
-        <div className="rounded-xl sam-glass-panel p-8 text-center">
+        <div className="flex-1 rounded-xl sam-glass-panel p-8 text-center">
           <Search className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
           <p className="text-sm font-medium text-white mb-1">No matches</p>
           <p className="text-xs text-muted-foreground/70">

@@ -54,7 +54,8 @@ namespace SAM.Service.Core
                 // name like "ACHIEVEMENTS" or "INT" instead of an integer.
                 if (rawType < 0)
                 {
-                    rawType = stat["type"].AsString("") switch
+                    var typeString = stat["type"].AsString("");
+                    rawType = typeString switch
                     {
                         var s when s.Equals("INT", StringComparison.OrdinalIgnoreCase) => 1,
                         var s when s.Equals("FLOAT", StringComparison.OrdinalIgnoreCase) => 2,
@@ -63,6 +64,11 @@ namespace SAM.Service.Core
                         var s when s.Equals("GROUPACHIEVEMENTS", StringComparison.OrdinalIgnoreCase) => 5,
                         _ => 0
                     };
+                    if (rawType == 0 && !string.IsNullOrEmpty(typeString))
+                    {
+                        API.SecurityLogger.Log(API.LogLevel.Warning, API.LogContext.Validation,
+                            $"Unknown stat type string '{typeString}' in schema for AppId {appId}");
+                    }
                 }
 
                 var type = (API.Types.UserStatType)rawType;

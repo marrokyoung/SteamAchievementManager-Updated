@@ -1,6 +1,6 @@
 {
   "name": "steam-achievement-manager",
-  "version": "8.0.3",
+  "version": "8.0.4",
   "main": "dist-electron/index.cjs",
   "scripts": {
     "dev": "vite",

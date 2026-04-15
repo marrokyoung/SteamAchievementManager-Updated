@@ -118,7 +118,7 @@ export function StatsSection({
   const totalCount = gameData?.stats.length ?? 0
 
   return (
-    <div>
+    <div className="flex flex-col h-full">
       <div className="mb-4 space-y-2">
         <h3 className="text-lg font-semibold flex items-center gap-2 flex-wrap">
           <span className="whitespace-nowrap">Stats ({totalCount})</span>
@@ -173,7 +173,7 @@ export function StatsSection({
       </div>
 
       {totalCount === 0 ? (
-        <div className="rounded-xl sam-glass-panel p-8 text-center">
+        <div className="flex-1 rounded-xl sam-glass-panel p-8 text-center">
           <BarChart3 className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
           <p className="text-sm font-medium text-white mb-1">No statistics</p>
           <p className="text-xs text-muted-foreground/70">
@@ -181,7 +181,7 @@ export function StatsSection({
           </p>
         </div>
       ) : filteredStats.length === 0 ? (
-        <div className="rounded-xl sam-glass-panel p-8 text-center">
+        <div className="flex-1 rounded-xl sam-glass-panel p-8 text-center">
           <Search className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
           <p className="text-sm font-medium text-white mb-1">No matches</p>
           <p className="text-xs text-muted-foreground/70">
